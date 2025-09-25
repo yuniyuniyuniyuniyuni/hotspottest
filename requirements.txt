@@ -4,21 +4,21 @@ click==8.3.0
 fastapi==0.117.1
 h11==0.16.0
 idna==3.10
-joblib @ file:///home/conda/feedstock_root/build_artifacts/joblib_1756321760188/work
-numpy @ file:///Users/runner/miniforge3/conda-bld/bld/rattler-build_numpy_1757504947/work/dist/numpy-2.3.3-cp312-cp312-macosx_11_0_arm64.whl#sha256=8e7c8567275473731bdc11d5b40e87bdc1995ff45ea5e5693855593a9c43c7fe
+joblib 
+numpy 
 pandas==2.3.2
 pydantic==2.11.9
 pydantic_core==2.33.2
 python-dateutil==2.9.0.post0
 python-multipart==0.0.20
 pytz==2025.2
-scikit-learn @ file:///Users/runner/miniforge3/conda-bld/scikit-learn_1757406542027/work/dist/scikit_learn-1.7.2-cp312-cp312-macosx_11_0_arm64.whl#sha256=fa7d60a76e425b084a94f76144627fbc56f12ee89327cd6afbb128d358a4141f
-scipy @ file:///Users/runner/miniforge3/conda-bld/scipy-split_1757681096992/work/dist/scipy-1.16.2-cp312-cp312-macosx_11_0_arm64.whl#sha256=152337200d215a40e5da0bd171f735be0292da7037e77b6d968e47255ec03aff
+scikit-learn
+scipy
 setuptools==78.1.1
 six==1.17.0
 sniffio==1.3.1
 starlette==0.48.0
-threadpoolctl @ file:///home/conda/feedstock_root/build_artifacts/threadpoolctl_1741878222898/work
+threadpoolctl
 typing-inspection==0.4.1
 typing_extensions==4.15.0
 tzdata==2025.2
