@@ -16,8 +16,11 @@ MODEL_PATH = "model.joblib"
 FEATURE_PATH = "feature_columns.json"
 
 # 학습/추론 데이터 경로 분리
-DATA_PATH_2022 = "../data/predict_db/행정동X업종_통합_20221.csv"
-DATA_PATH_2025 = "../data/predict_db/행정동X업종_통합_20251.csv" # 2025년 추론 데이터 파일명 (필요 시 수정)
+from pathlib import Path
+
+# Path 객체 생성 시 슬래시를 사용해도 내부적으로 OS에 맞게 처리됩니다.
+DATA_PATH_2022 = Path("..") / "data" / "predict_db" / "행정동X업종_통합_20221.csv"
+DATA_PATH_2025 = Path("..") / "data" / "predict_db" / "행정동X업종_통합_20251.csv" # 2025년 추론 데이터 파일명 (필요 시 수정)
 
 SEED = 42
 
