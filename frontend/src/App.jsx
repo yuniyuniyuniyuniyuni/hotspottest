@@ -1,7 +1,10 @@
 // App.jsx
 import React, { useMemo, useState } from "react";
 import "./App.css";
-import DONG_OPTIONS from "./dongOptions.js";
+
+// 행정동 이름과 코드의 매핑 리스트를 불러옵니다.
+// 이 파일은 사용자가 제공한 CSV 파일을 기반으로 생성되었다고 가정합니다.
+import DONG_OPTIONS from "./dongOptions"; 
 
 const DEFAULT_API_BASE =
   import.meta.env.VITE_API_BASE ||
@@ -23,7 +26,12 @@ const INDUSTRY_OPTIONS = [
 export default function App() {
   const API_BASE = useMemo(() => DEFAULT_API_BASE, []);
 
-  const [dongCode, setDongCode] = useState("");
+  // 행정동 이름 (사용자 입력)
+  const [dongName, setDongName] = useState("");
+  
+  // 행정동 코드 (API 요청에 사용될 실제 값)
+  const [dongCode, setDongCode] = useState(""); 
+  
   const [industryCode, setIndustryCode] = useState("");
 
   const [file, setFile] = useState(null);
@@ -38,14 +46,38 @@ export default function App() {
     setLoading(true);
     setPredictionValue(null);
 
-    if (!dongCode || !industryCode) {
-      setErrorMsg("지역과 업종을 선택해 주세요.");
+    // 1. 행정동 이름을 기반으로 코드를 찾습니다.
+    const selectedDong = DONG_OPTIONS.find(
+      (dong) => dong.name === dongName
+    );
+
+    let finalDongCode = dongCode;
+    
+    // 이름이 정확히 일치하는 코드가 있다면 업데이트
+    if (selectedDong) {
+      finalDongCode = selectedDong.code;
+      setDongCode(finalDongCode); // 상태도 업데이트
+    } 
+    
+    // 2. 입력값 및 코드 유효성 검사
+    if (!finalDongCode || !industryCode) {
+      // 코드를 찾지 못했거나 업종이 선택되지 않은 경우
+      let msg = "";
+      if (!finalDongCode) {
+         msg += "유효한 행정동 이름을 입력했는지 확인해 주세요. ";
+      }
+      if (!industryCode) {
+         msg += "업종을 선택해 주세요. ";
+      }
+      
+      setErrorMsg(msg.trim() || "지역과 업종을 선택/입력해 주세요.");
       setLoading(false);
       return;
     }
 
     try {
-      const payload = { dong_code: dongCode, industry_code: industryCode };
+      // 3. 찾은 코드로 API 요청
+      const payload = { dong_code: finalDongCode, industry_code: industryCode };
       const response = await fetch(`${API_BASE}/predict_by_selection`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -68,6 +100,7 @@ export default function App() {
   };
 
   const handleCSVUpload = async () => {
+    // CSV 업로드 로직은 변경 없이 유지
     setErrorMsg("");
     setLoading(true);
     setPredictionValue(null);
@@ -93,6 +126,7 @@ export default function App() {
 
       const data = await response.json();
       if (Array.isArray(data) && data.length > 0) {
+        // CSV 파일이 예측 결과를 여러 개 반환할 수 있지만, 여기서는 첫 번째 결과만 표시합니다.
         setPredictionValue(data[0].prediction);
       } else {
         setErrorMsg("CSV 예측 결과가 올바르지 않습니다.");
@@ -112,21 +146,29 @@ export default function App() {
       </header>
       <main className="app__main">
         <section className="card">
-          <h2>상권 선택 후 예측</h2>
+          <h2>상권 이름 입력 후 예측</h2>
           <form className="form" onSubmit={handlePredictBySelection}>
             <div className="grid">
               <div className="field">
-                <label>행정동 코드</label>
-                <select
-                  value={dongCode}
-                  onChange={(e) => setDongCode(e.target.value)}
-                >
-                  <option value="">지역 선택</option>
-                  {DONG_OPTIONS.map(option => (
-                    <option key={option.code} value={option.code}>{option.name}</option>
+                <label htmlFor="dongNameInput">행정동 이름</label>
+                {/* 행정동 이름 입력 필드 */}
+                <input
+                  id="dongNameInput"
+                  type="text"
+                  placeholder="예: 청운효자동" 
+                  value={dongName}
+                  onChange={(e) => setDongName(e.target.value)}
+                  list="dong-names" // datalist와 연결
+                />
+                
+                {/* 행정동 이름을 자동 완성할 수 있도록 datalist 추가 (선택 사항) */}
+                <datalist id="dong-names">
+                  {DONG_OPTIONS.map((dong) => (
+                    <option key={dong.code} value={dong.name} />
                   ))}
-                </select>
+                </datalist>
               </div>
+              
               <div className="field">
                 <label>서비스 업종 코드</label>
                 <select
@@ -141,23 +183,9 @@ export default function App() {
               </div>
             </div>
             <button className="btn" type="submit" disabled={loading}>
-              {loading ? "예측 중..." : "선택하여 예측하기"}
+              {loading ? "예측 중..." : "예측하기"}
             </button>
           </form>
-        </section>
-
-        <section className="card">
-          <h2>CSV 일괄 예측</h2>
-          <div className="csv">
-            <input
-              type="file"
-              accept=".csv"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-            <button className="btn btn--ghost" onClick={handleCSVUpload} disabled={loading}>
-              업로드 & 예측
-            </button>
-          </div>
         </section>
 
         {errorMsg && (
@@ -171,7 +199,6 @@ export default function App() {
           <section className="card card--success">
             <h2>예측 결과</h2>
             <div className="prediction-value-container">
-              {/* 백엔드에서 받은 값을 그대로 표시 */}
               <span className="prediction-value">
                 {Number(predictionValue).toFixed(2)}%
               </span>
