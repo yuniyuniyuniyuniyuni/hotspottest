@@ -4,19 +4,21 @@ import joblib
 from typing import List, Optional
 from contextlib import asynccontextmanager
 from pathlib import Path
-
+import numpy as np
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from xgboost import XGBRegressor
+from sklearn.preprocessing import StandardScaler
 
 
 MODEL_PATH = "model.joblib"
 FEATURE_PATH = "feature_columns.json"
+SCALER_PATH = "scaler.joblib"
 
-DATA_PATH_2022 = Path("..") / "data" / "predict_db" / "행정동X업종_통합_20221.csv"
-DATA_PATH_2025 = Path("..") / "data" / "predict_db" / "행정동X업종_통합_20251.csv" 
+DATA_PATH_2022 = Path("..") / "data" / "predict_db" / "train_서울시_2024_분기별.csv"
+DATA_PATH_2025 = Path("..") / "data" / "predict_db" / "서울시_2025_2.csv" 
 
 SEED = 42
 
@@ -73,28 +75,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def drop_identifier_cols(df: pd.DataFrame) -> pd.DataFrame:
-    """코드/이름 라벨성 컬럼 제거."""
-    drop_cols = [c for c in df.columns if ("코드" in c) or c.endswith("_명")]
-    return df.drop(columns=drop_cols, errors="ignore")
 
 def build_X_from_df(df: pd.DataFrame) -> pd.DataFrame:
     """데이터프레임 기반으로 학습 시 사용한 X 데이터프레임을 구성."""
-    df = drop_identifier_cols(df)
-
-    if "기준_년분기_코드" in df.columns:
-        s = df["기준_년분기_코드"].astype(str)
-        df["연도"] = s.str.extract(r"(20\d{2})").astype(float)
-        df["분기"] = s.str.extract(r"(?:20\d{2})\D*([1-4])").astype(float)
-        df = df.drop(columns=["기준_년분기_코드"])
     
-    obj_cols = [c for c in df.select_dtypes(include="object").columns.tolist() if c in obj_ref_cols]
-    df = pd.get_dummies(df, columns=obj_cols, dummy_na=True)
+    categorical_features = ['행정동_코드_명', '서비스_업종_코드_명', '상권_변화_지표', '상권_변화_지표_명']
+    df = pd.get_dummies(df, columns=categorical_features, dummy_na=False)
 
-    X = pd.DataFrame(columns=feature_columns)
-    X = pd.concat([X, df], ignore_index=True)
-    X = X.fillna(0)
-    X = X[feature_columns]
+    obj_ref_cols = df.select_dtypes(include="object").columns.tolist() # 인코딩 전 object 컬럼 목록 저장
+
+    # 참고: 행정동, 업종과 같이 범주가 많은(고차원) 변수는 Target Encoding이나 CatBoost Encoding 사용 시 성능 향상 가능성이 높습니다.
+    obj_cols = df.select_dtypes(include="object").columns.tolist()
+    df = pd.get_dummies(df, columns=obj_cols, dummy_na=True)
+    X = df.reindex(columns=feature_columns, fill_value=0)   
+    
     
     return X
 
@@ -129,52 +123,21 @@ def predict_by_selection(payload: PredictSelectionPayload):
 
     try:
         X = build_X_from_df(df_filtered)
-        
+        loaded_scaler = joblib.load('scaler.joblib')
+        X = loaded_scaler.transform(X)
         predictions = model.predict(X)
-        pred = float(predictions.mean())
-        
+        pred = np.expm1(predictions)
+        pred = float(pred)
         return {
             "dong_code": payload.dong_code,
             "industry_code": payload.industry_code,
-            "prediction": round(pred, 4),
+            "prediction": round(pred, 1),
         }
+  
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
 
-@app.post("/predict_csv")
-async def predict_csv(file: UploadFile = File(...)):
-    if model is None or not feature_columns:
-        raise HTTPException(status_code=500, detail="Model not ready")
 
-    try:
-        content = (await file.read()).decode('utf-8', errors='ignore')
-        df = pd.read_csv(io.StringIO(content))
-
-        df = drop_identifier_cols(df)
-        
-        if "기준_년분기_코드" in df.columns:
-            s = df["기준_년분기_코드"].astype(str)
-            df["연도"] = s.str.extract(r"(20\d{2})").astype(float)
-            df["분기"] = s.str.extract(r"(?:20\d{2})\D*([1-4])").astype(float)
-            df = df.drop(columns=["기준_년분기_코드"])
-
-        obj_cols = [c for c in df.select_dtypes(include="object").columns.tolist() if c in obj_ref_cols]
-        df = pd.get_dummies(df, columns=obj_cols, dummy_na=True)
-        
-        X = pd.DataFrame(columns=feature_columns)
-        X = pd.concat([X, df], ignore_index=True)
-        X = X.fillna(0)
-        X = X[feature_columns]
-
-        predictions = model.predict(X)
-
-        result = [
-            {"row_id": i, "prediction": round(float(p), 4)}
-            for i, p in enumerate(predictions)
-        ]
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"CSV prediction failed: {e}")
 
 if __name__ == "__main__":
 
