@@ -99,45 +99,7 @@ export default function App() {
     }
   };
 
-  const handleCSVUpload = async () => {
-    // CSV 업로드 로직은 변경 없이 유지
-    setErrorMsg("");
-    setLoading(true);
-    setPredictionValue(null);
 
-    if (!file) {
-      setErrorMsg("파일을 선택해 주세요.");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(`${API_BASE}/predict_csv`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
-        // CSV 파일이 예측 결과를 여러 개 반환할 수 있지만, 여기서는 첫 번째 결과만 표시합니다.
-        setPredictionValue(data[0].prediction);
-      } else {
-        setErrorMsg("CSV 예측 결과가 올바르지 않습니다.");
-      }
-    } catch (e) {
-      console.error("CSV upload failed:", e);
-      setErrorMsg(`CSV 업로드 및 예측 실패: ${e.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="app">
@@ -197,10 +159,10 @@ export default function App() {
 
         {predictionValue !== null && (
           <section className="card card--success">
-            <h2>예측 결과</h2>
+            <h2>예측 결과 (단위: 원)</h2>
             <div className="prediction-value-container">
               <span className="prediction-value">
-                {Number(predictionValue).toFixed(2)}%
+                {Number(predictionValue).toFixed(2)}
               </span>
             </div>
           </section>
