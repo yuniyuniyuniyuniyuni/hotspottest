@@ -232,3 +232,8 @@ textarea {
   letter-spacing: -2px;
 }
 
+.unit {
+  font-size: 1.25rem;
+  margin-left: 0.5rem;
+  color: #495057;
+}

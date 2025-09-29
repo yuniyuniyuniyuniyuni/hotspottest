@@ -1,72 +1,44 @@
-import io
-import json
-import joblib
-from typing import List, Optional
-from contextlib import asynccontextmanager
-from pathlib import Path
-import numpy as np
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from typing import Optional
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from xgboost import XGBRegressor
-from sklearn.preprocessing import StandardScaler
+from pathlib import Path
 
+# --- 전역 변수 ---
+# 배치 예측 결과가 저장될 DataFrame
+predictions_db: Optional[pd.DataFrame] = None
 
-MODEL_PATH = "model.joblib"
-FEATURE_PATH = "feature_columns.json"
-SCALER_PATH = "scaler.joblib"
-
-DATA_PATH_2022 = Path("..") / "data" / "predict_db" / "train_서울시_2024_분기별.csv"
-DATA_PATH_2025 = Path("..") / "data" / "predict_db" / "서울시_2025_2.csv" 
-
-SEED = 42
-
-model: Optional[XGBRegressor] = None
-feature_columns: List[str] = []
-obj_ref_cols: List[str] = []
-
-raw_df_2022: Optional[pd.DataFrame] = None
-raw_df_2025: Optional[pd.DataFrame] = None
-
-def load_resources():
-    """모델, 특성 컬럼 목록, 그리고 원본 데이터를 로드."""
-    global model, feature_columns, obj_ref_cols, raw_df_2022, raw_df_2025
-    
-    try:
-        model = joblib.load(MODEL_PATH)
-        with open(FEATURE_PATH, 'r') as f:
-            data = json.load(f)
-            feature_columns = data['feature_columns']
-            obj_ref_cols = data['obj_ref_cols']
-
-        raw_df_2022 = pd.read_csv(DATA_PATH_2022, encoding='utf-8-sig')
-
-        raw_df_2025 = pd.read_csv(DATA_PATH_2025, encoding='utf-8-sig')
-
-        print("Model, features, and raw data loaded successfully.")
-        return True
-
-    except Exception as e:
-        print(f"Error loading resources: {e}")
-        model = None
-        feature_columns = []
-        raw_df_2022 = None
-        raw_df_2025 = None
-        return False
+# 예측 결과 파일 경로 (실제 경로에 맞게 수정해주세요)
+PREDICTIONS_PATH = Path("..") / "data" / "predict_db" / "predictions_2025.csv"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """서버 시작 시 자원 로드, 종료 시 자원 해제(필요하다면)를 관리."""
-    print("Application Startup: Loading resources...")
-    if not load_resources():
-        print("WARNING: Resources failed to load. The server will start, but prediction endpoints will fail.")
+    """서버가 시작될 때 미리 계산된 예측 결과 파일을 로드합니다."""
+    global predictions_db
+    try:
+        predictions_db = pd.read_csv(PREDICTIONS_PATH)
+        print(f"✅ 성공: '{PREDICTIONS_PATH}'에서 예측 결과를 로드했습니다.")
+        print(f"로드된 데이터 수: {len(predictions_db)}개")
+    except FileNotFoundError:
+        print(f"❌ 오류: 예측 결과 파일('{PREDICTIONS_PATH}')을 찾을 수 없습니다.")
+        predictions_db = None
+    except Exception as e:
+        print(f"❌ 오류: 예측 결과 로드 중 예외 발생: {e}")
+        predictions_db = None
     yield
-    print("Application Shutdown: Resources cleanup complete.")
+    print("Application Shutdown.")
 
 
-# ===== 앱 생성 & CORS (lifespan 인자 추가) =====
-app = FastAPI(title="HotSpot Survival API", version="0.1", lifespan=lifespan)
+# ===== 앱 생성 & CORS =====
+app = FastAPI(
+    title="HotSpot Survival API",
+    version="0.2", # 버전 업데이트
+    description="미리 계산된 상권 생존율 예측 데이터를 제공합니다.",
+    lifespan=lifespan
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -75,32 +47,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-def build_X_from_df(df: pd.DataFrame) -> pd.DataFrame:
-    """데이터프레임 기반으로 학습 시 사용한 X 데이터프레임을 구성."""
-    
-    categorical_features = ['행정동_코드_명', '서비스_업종_코드_명', '상권_변화_지표', '상권_변화_지표_명']
-    df = pd.get_dummies(df, columns=categorical_features, dummy_na=False)
-
-    obj_ref_cols = df.select_dtypes(include="object").columns.tolist() # 인코딩 전 object 컬럼 목록 저장
-
-    # 참고: 행정동, 업종과 같이 범주가 많은(고차원) 변수는 Target Encoding이나 CatBoost Encoding 사용 시 성능 향상 가능성이 높습니다.
-    obj_cols = df.select_dtypes(include="object").columns.tolist()
-    df = pd.get_dummies(df, columns=obj_cols, dummy_na=True)
-    X = df.reindex(columns=feature_columns, fill_value=0)   
-    
-    
-    return X
-
-
 # ===== API 라우터 =====
 @app.get("/")
 def health_check():
-    """서버 상태 확인 및 리소스 로드 여부 반환."""
+    """서버 상태와 예측 데이터 로드 여부를 확인합니다."""
     return {
         "status": "ok",
-        "model_ready": model is not None,
-        "data_2025_ready": raw_df_2025 is not None,
+        "prediction_data_ready": predictions_db is not None,
     }
 
 class PredictSelectionPayload(BaseModel):
@@ -109,38 +62,42 @@ class PredictSelectionPayload(BaseModel):
 
 @app.post("/predict_by_selection")
 def predict_by_selection(payload: PredictSelectionPayload):
-    if model is None or raw_df_2025 is None:
-        raise HTTPException(status_code=500, detail="Server resources not ready. Model or 2025 data failed to load.")
-    
-
-    df_filtered = raw_df_2025[
-        (raw_df_2025['행정동_코드'] == int(payload.dong_code)) &
-        (raw_df_2025['서비스_업종_코드'] == payload.industry_code)
-    ].copy()
-
-    if df_filtered.empty:
-        raise HTTPException(status_code=404, detail="No data found for the selected region and industry in the 2025 dataset.")
+    """미리 계산된 데이터베이스에서 행정동/업종 코드에 맞는 예측 결과를 조회합니다."""
+    if predictions_db is None:
+        raise HTTPException(status_code=503, detail="서버 리소스(예측 DB)가 준비되지 않았습니다. 서버 로그를 확인해주세요.")
 
     try:
-        X = build_X_from_df(df_filtered)
-        loaded_scaler = joblib.load('scaler.joblib')
-        X = loaded_scaler.transform(X)
-        predictions = model.predict(X)
-        pred = np.expm1(predictions)
-        pred = float(pred)
+        # DataFrame에서 조건에 맞는 결과 조회
+        result_row = predictions_db[
+            (predictions_db['행정동_코드'] == int(payload.dong_code)) &
+            (predictions_db['서비스_업종_코드'] == payload.industry_code)
+        ]
+
+        if result_row.empty:
+            raise HTTPException(status_code=404, detail="선택한 지역과 업종에 대한 데이터를 찾을 수 없습니다.")
+
+        # 조회된 첫 번째 행의 데이터를 사용
+        prediction_data = result_row.iloc[0]
+
+        # '점포당_매출_금액_예측' 컬럼이 있는지 확인하고 값을 가져옴
+        if '점포당_매출_금액_예측' not in prediction_data:
+             raise HTTPException(status_code=500, detail="결과 파일에 '점포당_매출_금액_예측' 컬럼이 없습니다.")
+
+        prediction_value = prediction_data['점포당_매출_금액_예측']
+
+        # 결과 반환 (MWS 점수 등 다른 컬럼이 있다면 여기서 추가 가능)
         return {
             "dong_code": payload.dong_code,
             "industry_code": payload.industry_code,
-            "prediction": round(pred, 1),
+            "prediction": round(float(prediction_value), 1),
         }
-  
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
 
+    except Exception as e:
+        # 예상치 못한 오류에 대한 로깅 및 처리
+        print(f"An error occurred during prediction lookup: {e}")
+        raise HTTPException(status_code=500, detail=f"예측 조회 중 오류 발생: {e}")
 
 
 if __name__ == "__main__":
-
-    
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
