@@ -145,7 +145,7 @@ export default function App() {
               </div>
             </div>
             <button className="btn" type="submit" disabled={loading}>
-              {loading ? "예측 중..." : "예측하기"}
+              예측하기
             </button>
           </form>
         </section>
@@ -162,15 +162,16 @@ export default function App() {
             <h2>예측 결과 (단위: 원)</h2>
             <div className="prediction-value-container">
               <span className="prediction-value">
-                {Number(predictionValue).toFixed(2)}
+                {Number(predictionValue).toLocaleString()}
               </span>
+              <span className="unit">원</span>
             </div>
           </section>
         )}
       </main>
 
       <footer className="footer">
-        <span>MVP • HotSpot</span>
+        <span>HotSpot</span>
       </footer>
     </div>
   );
