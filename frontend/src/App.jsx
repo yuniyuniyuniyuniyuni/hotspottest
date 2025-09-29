@@ -1,15 +1,8 @@
 // App.jsx
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import "./App.css";
-
-// 행정동 이름과 코드의 매핑 리스트를 불러옵니다.
-// 이 파일은 사용자가 제공한 CSV 파일을 기반으로 생성되었다고 가정합니다.
-import DONG_OPTIONS from "./dongOptions"; 
-
-const DEFAULT_API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  "http://localhost:8000";
-
+import DONG_OPTIONS from "./dongOptions"; // 행정동 데이터
+// 실제 서비스에서는 업종 데이터를 DB나 별도 파일로 관리할 것입니다.
 const INDUSTRY_OPTIONS = [
   { code: "CS100001", name: "한식음식점" },
   { code: "CS100002", name: "중식음식점" },
@@ -23,156 +16,264 @@ const INDUSTRY_OPTIONS = [
   { code: "CS100010", name: "커피-음료" },
 ];
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+
 export default function App() {
-  const API_BASE = useMemo(() => DEFAULT_API_BASE, []);
-
-  // 행정동 이름 (사용자 입력)
-  const [dongName, setDongName] = useState("");
-  
-  // 행정동 코드 (API 요청에 사용될 실제 값)
-  const [dongCode, setDongCode] = useState(""); 
-  
-  const [industryCode, setIndustryCode] = useState("");
-
-  const [file, setFile] = useState(null);
-
+  const [selectedDongName, setSelectedDongName] = useState("");
+  const [selectedIndustryCode, setSelectedIndustryCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [predictionValue, setPredictionValue] = useState(null);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [error, setError] = useState("");
+  const [showResults, setShowResults] = useState(false); // 결과 페이지 표시 여부
 
-  const handlePredictBySelection = async (e) => {
+  // 결과 데이터 상태
+  const [predictionResult, setPredictionResult] = useState(null); // 매출 예측 및 CBS 점수
+  const [topIndustries, setTopIndustries] = useState([]); // 지역별 추천 업종
+  const [topRegions, setTopRegions] = useState([]); // 업종별 추천 지역
+
+  // 초기화 함수
+  const resetApp = () => {
+    setSelectedDongName("");
+    setSelectedIndustryCode("");
+    setLoading(false);
+    setError("");
+    setShowResults(false);
+    setPredictionResult(null);
+    setTopIndustries([]);
+    setTopRegions([]);
+  };
+
+  // 모든 API를 호출하고 결과를 한 번에 받아오는 함수
+  const analyzeCommercialArea = async (e) => {
     e.preventDefault();
-    setErrorMsg("");
+    setError("");
     setLoading(true);
-    setPredictionValue(null);
+    setShowResults(false); // 분석 시작 시 결과 숨김
 
-    // 1. 행정동 이름을 기반으로 코드를 찾습니다.
-    const selectedDong = DONG_OPTIONS.find(
-      (dong) => dong.name === dongName
-    );
-
-    let finalDongCode = dongCode;
-    
-    // 이름이 정확히 일치하는 코드가 있다면 업데이트
-    if (selectedDong) {
-      finalDongCode = selectedDong.code;
-      setDongCode(finalDongCode); // 상태도 업데이트
-    } 
-    
-    // 2. 입력값 및 코드 유효성 검사
-    if (!finalDongCode || !industryCode) {
-      // 코드를 찾지 못했거나 업종이 선택되지 않은 경우
-      let msg = "";
-      if (!finalDongCode) {
-         msg += "유효한 행정동 이름을 입력했는지 확인해 주세요. ";
-      }
-      if (!industryCode) {
-         msg += "업종을 선택해 주세요. ";
-      }
-      
-      setErrorMsg(msg.trim() || "지역과 업종을 선택/입력해 주세요.");
+    const dong = DONG_OPTIONS.find((d) => d.name === selectedDongName);
+    if (!dong || !selectedIndustryCode) {
+      setError("유효한 지역과 업종을 모두 선택해주세요.");
       setLoading(false);
       return;
     }
 
+    const dongCode = dong.code;
+
     try {
-      // 3. 찾은 코드로 API 요청
-      const payload = { dong_code: finalDongCode, industry_code: industryCode };
-      const response = await fetch(`${API_BASE}/predict_by_selection`, {
+      // 1. 상권 분석 (매출 및 CBS 점수)
+      const predictResponse = await fetch(`${API_BASE}/predict_by_selection`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ dong_code: dongCode, industry_code: selectedIndustryCode }),
       });
+      if (!predictResponse.ok) throw new Error((await predictResponse.json()).detail || "상권 분석 실패");
+      const predictData = await predictResponse.json();
+      setPredictionResult(predictData);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`HTTP error! status: ${response.status}, detail: ${errorData.detail}`);
-      }
+      // 2. 지역별 추천 업종 (현재 선택된 지역 기준)
+      const industriesResponse = await fetch(`${API_BASE}/recommend/industries?dong_code=${dongCode}`);
+      if (!industriesResponse.ok) throw new Error((await industriesResponse.json()).detail || "업종 추천 실패");
+      const industriesData = await industriesResponse.json();
+      setTopIndustries(industriesData);
 
-      const data = await response.json();
-      setPredictionValue(data.prediction);
+      // 3. 업종별 추천 지역 (현재 선택된 업종 기준)
+      const regionsResponse = await fetch(`${API_BASE}/recommend/regions?industry_code=${selectedIndustryCode}`);
+      if (!regionsResponse.ok) throw new Error((await regionsResponse.json()).detail || "지역 추천 실패");
+      const regionsData = await regionsResponse.json();
+      setTopRegions(regionsData);
+
+      setShowResults(true); // 모든 API 호출 성공 시 결과 표시
     } catch (e) {
-      console.error("Prediction failed:", e);
-      setErrorMsg(`예측 요청 실패: ${e.message}`);
+      setError(`분석 실패: ${e.message}`);
+      setShowResults(false); // 오류 발생 시 결과 숨김
     } finally {
       setLoading(false);
     }
   };
 
+  // 점수 게이지 스타일 계산
+  const cbsScore = predictionResult?.cbs_score || 0;
+  const progressStyle = {
+    "--progress": `${cbsScore}%`,
+    "--color":
+      cbsScore >= 80 ? "#4CAF50" : cbsScore >= 60 ? "#FFC107" : "#F44336",
+  };
 
+  const selectedIndustryName = INDUSTRY_OPTIONS.find(
+    (opt) => opt.code === selectedIndustryCode
+  )?.name;
 
   return (
-    <div className="app">
-      <header className="app__header">
-        <h1>✨ 상권 생존율 예측</h1>
-      </header>
-      <main className="app__main">
-        <section className="card">
-          <h2>상권 이름 입력 후 예측</h2>
-          <form className="form" onSubmit={handlePredictBySelection}>
-            <div className="grid">
-              <div className="field">
-                <label htmlFor="dongNameInput">행정동 이름</label>
-                {/* 행정동 이름 입력 필드 */}
-                <input
-                  id="dongNameInput"
-                  type="text"
-                  placeholder="예: 청운효자동" 
-                  value={dongName}
-                  onChange={(e) => setDongName(e.target.value)}
-                  list="dong-names" // datalist와 연결
-                />
-                
-                {/* 행정동 이름을 자동 완성할 수 있도록 datalist 추가 (선택 사항) */}
-                <datalist id="dong-names">
-                  {DONG_OPTIONS.map((dong) => (
-                    <option key={dong.code} value={dong.name} />
-                  ))}
-                </datalist>
-              </div>
-              
-              <div className="field">
-                <label>서비스 업종 코드</label>
-                <select
-                  value={industryCode}
-                  onChange={(e) => setIndustryCode(e.target.value)}
-                >
-                  <option value="">업종 선택</option>
-                  {INDUSTRY_OPTIONS.map(option => (
-                    <option key={option.code} value={option.code}>{option.name}</option>
-                  ))}
-                </select>
-              </div>
+    <div className="app-container">
+      {!showResults ? (
+        // 초기 입력 폼 (Image 2)
+        <div className="initial-form-card">
+          <h1 className="title">장사잘될지도</h1>
+          <form className="form" onSubmit={analyzeCommercialArea}>
+            <div className="field">
+              <label htmlFor="dongNameInput" className="label">
+                지역
+              </label>
+              <input
+                id="dongNameInput"
+                type="text"
+                placeholder="희망 지역을 선택하세요."
+                value={selectedDongName}
+                onChange={(e) => setSelectedDongName(e.target.value)}
+                list="dong-names"
+                className="input"
+                required
+              />
+              <datalist id="dong-names">
+                {DONG_OPTIONS.map((d) => (
+                  <option key={d.code} value={d.name} />
+                ))}
+              </datalist>
             </div>
-            <button className="btn" type="submit" disabled={loading}>
-              예측하기
+            <div className="field">
+              <label htmlFor="industrySelect" className="label">
+                업종
+              </label>
+              <select
+                id="industrySelect"
+                value={selectedIndustryCode}
+                onChange={(e) => setSelectedIndustryCode(e.target.value)}
+                className="input select"
+                required
+              >
+                <option value="">희망 업종을 선택하세요.</option>
+                {INDUSTRY_OPTIONS.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {error && <p className="error-message">{error}</p>}
+            <button type="submit" className="analyze-button" disabled={loading}>
+              {loading ? "분석 중..." : "성공률 분석"}
             </button>
           </form>
-        </section>
-
-        {errorMsg && (
-          <section className="card card--error">
-            <h3>오류</h3>
-            <pre className="pre">{errorMsg}</pre>
-          </section>
-        )}
-
-        {predictionValue !== null && (
-          <section className="card card--success">
-            <h2>예측 결과 (단위: 원)</h2>
-            <div className="prediction-value-container">
-              <span className="prediction-value">
-                {Number(predictionValue).toLocaleString()}
-              </span>
-              <span className="unit">원</span>
+        </div>
+      ) : (
+        // 결과 대시보드 (Image 1)
+        <div className="dashboard-container">
+          <header className="dashboard-header">
+            <h1 className="dashboard-title">장사잘될지도</h1>
+            <div className="header-actions">
+              <p className="selected-info">
+                선택하신 지역은{" "}
+                <span className="highlight-text">{selectedDongName}</span>,
+                업종은 <span className="highlight-text">{selectedIndustryName}</span> 입니다.
+              </p>
+              <button className="pdf-button" onClick={resetApp}>
+                재분석하기
+              </button>
             </div>
-          </section>
-        )}
-      </main>
+          </header>
 
-      <footer className="footer">
-        <span>HotSpot</span>
-      </footer>
+          <main className="dashboard-main">
+            <div className="score-and-prediction">
+              <div className="score-card card">
+                <h3>점수</h3>
+                <div className="progress-circle-container" style={progressStyle}>
+                  <div className="progress-circle" data-progress={Math.round(cbsScore)}>
+                    <span className="score-text">
+                      {predictionResult ? Math.round(cbsScore) : "-"}점
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="prediction-card card">
+                <h3>매출 예측</h3>
+                <p className="prediction-value">
+                  {predictionResult
+                    ? Number(predictionResult.prediction).toLocaleString()
+                    : "-"}
+                  원
+                </p>
+                <div className="strength-weakness">
+                  {/* TODO: 강점/약점 요소는 백엔드 로직이 필요 */}
+                  <label className="checkbox-container">
+                    <input type="checkbox" checked={false} readOnly />
+                    <span className="checkmark"></span>
+                    강점 요소
+                  </label>
+                  <label className="checkbox-container">
+                    <input type="checkbox" checked={false} readOnly />
+                    <span className="checkmark"></span>
+                    약점 요소
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="recommendations-grid">
+              {/* 지역별 추천 업종 */}
+              <div className="recommendation-card card">
+                <h3>
+                  <span className="highlight-text-small">{selectedDongName}</span>에서 성공확률 높은 업종 TOP 5
+                </h3>
+                <table className="recommendation-table">
+                  <thead>
+                    <tr>
+                      <th>업종</th>
+
+                      <th>점수</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topIndustries.length > 0 ? (
+                      topIndustries.map((item, index) => (
+                        <tr key={index}>
+                          <td>{item.name}</td>
+
+                          <td>{item.cbs_score.toFixed(1)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="3">추천 업종이 없습니다.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 업종별 추천 지역 */}
+              <div className="recommendation-card card">
+                <h3>
+                  <span className="highlight-text-small">{selectedIndustryName}</span>으로 성공확률 높은 지역 TOP 5
+                </h3>
+                <table className="recommendation-table">
+                  <thead>
+                    <tr>
+                      <th>지역</th>
+
+                      <th>점수</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topRegions.length > 0 ? (
+                      topRegions.map((item, index) => (
+                        <tr key={index}>
+                          <td>{item.name}</td>
+
+                          <td>{item.cbs_score.toFixed(1)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="3">추천 지역이 없습니다.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </main>
+        </div>
+      )}
     </div>
   );
 }
