@@ -135,7 +135,7 @@ body, html, #root {
 .score-info {
   position: absolute;
   right: 12px;
-  bottom: 12px;
+  top: 18px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -181,8 +181,19 @@ body, html, #root {
   border:1px solid #EFEAFD;
   border-radius: 14px;
   box-shadow: 0 12px 32px rgba(0,0,0,.16);
-  padding: 12px 12px 10px;
+  padding: 12px 20px 10px;
   animation: popIn .12s ease-out;
+  color: #000;
+}
+.score-popover-head {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+}
+.score-popover-close {
+  display: flex;
+  background-color: #ffffff;
+  border: none;
 }
 @keyframes popIn {
   from { transform: translateY(6px); opacity: 0; }
