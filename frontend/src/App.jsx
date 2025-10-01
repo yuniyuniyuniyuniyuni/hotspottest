@@ -1,8 +1,9 @@
-// App.jsx
-import React, { useState } from "react";
+// src/App.jsx
+import React, { useMemo, useState } from "react";
 import "./App.css";
-import DONG_OPTIONS from "./dongOptions"; // 행정동 데이터
-// 실제 서비스에서는 업종 데이터를 DB나 별도 파일로 관리할 것입니다.
+import DONG_OPTIONS from "./dongOptions";
+
+/** 업종 목록 (MVP용) */
 const INDUSTRY_OPTIONS = [
   { code: "CS100001", name: "한식음식점" },
   { code: "CS100002", name: "중식음식점" },
@@ -16,262 +17,342 @@ const INDUSTRY_OPTIONS = [
   { code: "CS100010", name: "커피-음료" },
 ];
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API_BASE = import.meta.env?.VITE_API_BASE || "http://localhost:8000";
+const MAIN_PURPLE = "#8A60E6";
 
 export default function App() {
-  const [selectedDongName, setSelectedDongName] = useState("");
-  const [selectedIndustryCode, setSelectedIndustryCode] = useState("");
+  const [dongName, setDongName] = useState("");
+  const [industryName, setIndustryName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showResults, setShowResults] = useState(false); // 결과 페이지 표시 여부
+  const [showResults, setShowResults] = useState(false);
 
-  // 결과 데이터 상태
-  const [predictionResult, setPredictionResult] = useState(null); // 매출 예측 및 CBS 점수
-  const [topIndustries, setTopIndustries] = useState([]); // 지역별 추천 업종
-  const [topRegions, setTopRegions] = useState([]); // 업종별 추천 지역
+  const [prediction, setPrediction] = useState(null);
+  const [topIndustries, setTopIndustries] = useState([]);
+  const [topRegions, setTopRegions] = useState([]);
+  const [activeInsight, setActiveInsight] = useState("strength");
+  const [openScoreInfo, setOpenScoreInfo] = useState(false);
 
-  // 초기화 함수
-  const resetApp = () => {
-    setSelectedDongName("");
-    setSelectedIndustryCode("");
-    setLoading(false);
-    setError("");
-    setShowResults(false);
-    setPredictionResult(null);
-    setTopIndustries([]);
-    setTopRegions([]);
+  const WEIGHTS = {
+    점포당_매출_금액: 0.35,
+    안정성_지수: 0.25,
+    성장성_지수: 0.20,
+    입지_우위_지수: 0.20,
   };
 
-  // 모든 API를 호출하고 결과를 한 번에 받아오는 함수
-  const analyzeCommercialArea = async (e) => {
+  const selectedDong = useMemo(
+    () => DONG_OPTIONS.find((d) => d.name === dongName) || null,
+    [dongName]
+  );
+  const selectedIndustry = useMemo(
+    () => INDUSTRY_OPTIONS.find((i) => i.name === industryName) || null,
+    [industryName]
+  );
+
+  const resetAll = () => {
+    setDongName("");
+    setIndustryName("");
+    setError("");
+    setShowResults(false);
+    setPrediction(null);
+    setTopIndustries([]);
+    setTopRegions([]);
+    setActiveInsight("strength");
+  };
+
+  const onAnalyze = async (e) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
-    setShowResults(false); // 분석 시작 시 결과 숨김
 
-    const dong = DONG_OPTIONS.find((d) => d.name === selectedDongName);
-    if (!dong || !selectedIndustryCode) {
-      setError("유효한 지역과 업종을 모두 선택해주세요.");
-      setLoading(false);
+    if (!selectedDong || !selectedIndustry) {
+      setError("지역과 업종을 모두 선택(검색)해 주세요.");
       return;
     }
 
-    const dongCode = dong.code;
-
+    setLoading(true);
     try {
-      // 1. 상권 분석 (매출 및 CBS 점수)
-      const predictResponse = await fetch(`${API_BASE}/predict_by_selection`, {
+      const resp1 = await fetch(`${API_BASE}/predict_by_selection`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dong_code: dongCode, industry_code: selectedIndustryCode }),
+        body: JSON.stringify({
+          dong_code: selectedDong.code,
+          industry_code: selectedIndustry.code,
+        }),
       });
-      if (!predictResponse.ok) throw new Error((await predictResponse.json()).detail || "상권 분석 실패");
-      const predictData = await predictResponse.json();
-      setPredictionResult(predictData);
+      if (!resp1.ok) {
+        const d = await resp1.json().catch(() => ({}));
+        throw new Error(d.detail || "상권 분석 실패");
+      }
+      const pred = await resp1.json();
+      setPrediction(pred);
 
-      // 2. 지역별 추천 업종 (현재 선택된 지역 기준)
-      const industriesResponse = await fetch(`${API_BASE}/recommend/industries?dong_code=${dongCode}`);
-      if (!industriesResponse.ok) throw new Error((await industriesResponse.json()).detail || "업종 추천 실패");
-      const industriesData = await industriesResponse.json();
-      setTopIndustries(industriesData);
+      const resp2 = await fetch(
+        `${API_BASE}/recommend/industries?dong_code=${selectedDong.code}`
+      );
+      setTopIndustries(await resp2.json());
 
-      // 3. 업종별 추천 지역 (현재 선택된 업종 기준)
-      const regionsResponse = await fetch(`${API_BASE}/recommend/regions?industry_code=${selectedIndustryCode}`);
-      if (!regionsResponse.ok) throw new Error((await regionsResponse.json()).detail || "지역 추천 실패");
-      const regionsData = await regionsResponse.json();
-      setTopRegions(regionsData);
+      const resp3 = await fetch(
+        `${API_BASE}/recommend/regions?industry_code=${selectedIndustry.code}`
+      );
+      setTopRegions(await resp3.json());
 
-      setShowResults(true); // 모든 API 호출 성공 시 결과 표시
-    } catch (e) {
-      setError(`분석 실패: ${e.message}`);
-      setShowResults(false); // 오류 발생 시 결과 숨김
+      setShowResults(true);
+    } catch (err) {
+      setError(err.message || "분석 중 오류가 발생했습니다.");
+      setShowResults(false);
     } finally {
       setLoading(false);
     }
   };
 
-  // 점수 게이지 스타일 계산
-  const cbsScore = predictionResult?.cbs_score || 0;
-  const progressStyle = {
-    "--progress": `${cbsScore}%`,
-    "--color":
-      cbsScore >= 80 ? "#4CAF50" : cbsScore >= 60 ? "#FFC107" : "#F44336",
+  const cbs = Math.round(Number(prediction?.cbs_score || 0));
+  const donutStyle = {
+    background: `conic-gradient(${MAIN_PURPLE} ${cbs * 3.6}deg, #EEEEEE ${
+      cbs * 3.6
+    }deg)`,
   };
 
-  const selectedIndustryName = INDUSTRY_OPTIONS.find(
-    (opt) => opt.code === selectedIndustryCode
-  )?.name;
-
   return (
-    <div className="app-container">
+    <div className="app-root">
       {!showResults ? (
-        // 초기 입력 폼 (Image 2)
-        <div className="initial-form-card">
-          <h1 className="title">장사잘될지도</h1>
-          <form className="form" onSubmit={analyzeCommercialArea}>
-            <div className="field">
-              <label htmlFor="dongNameInput" className="label">
-                지역
-              </label>
-              <input
-                id="dongNameInput"
-                type="text"
-                placeholder="희망 지역을 선택하세요."
-                value={selectedDongName}
-                onChange={(e) => setSelectedDongName(e.target.value)}
-                list="dong-names"
-                className="input"
-                required
-              />
-              <datalist id="dong-names">
-                {DONG_OPTIONS.map((d) => (
-                  <option key={d.code} value={d.name} />
-                ))}
-              </datalist>
-            </div>
-            <div className="field">
-              <label htmlFor="industrySelect" className="label">
-                업종
-              </label>
-              <select
-                id="industrySelect"
-                value={selectedIndustryCode}
-                onChange={(e) => setSelectedIndustryCode(e.target.value)}
-                className="input select"
-                required
-              >
-                <option value="">희망 업종을 선택하세요.</option>
-                {INDUSTRY_OPTIONS.map((opt) => (
-                  <option key={opt.code} value={opt.code}>
-                    {opt.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {error && <p className="error-message">{error}</p>}
-            <button type="submit" className="analyze-button" disabled={loading}>
-              {loading ? "분석 중..." : "성공률 분석"}
-            </button>
-          </form>
+        <div className="landing-wrap">
+          <div className="landing-card">
+            <img src="/logo.png" alt="Logo" className="logo-image" />
+            <div className="logo-box">장사잘될지도 로고</div>
+            <p className="subtitle">가나다라마바사아자차카타파하 서비스입니다.</p>
+            <hr className="divider" />
+            <form className="form" onSubmit={onAnalyze}>
+              <div className="field-row">
+                <label className="field-label">지역</label>
+                <input
+                  className="input"
+                  placeholder="희망 지역을 선택하세요."
+                  value={dongName}
+                  onChange={(e) => setDongName(e.target.value)}
+                  list="dong-list"
+                />
+                <datalist id="dong-list">
+                  {DONG_OPTIONS.map((d) => (
+                    <option key={d.code} value={d.name} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div className="field-row">
+                <label className="field-label">업종</label>
+                <input
+                  className="input"
+                  placeholder="희망 업종을 선택하세요."
+                  value={industryName}
+                  onChange={(e) => setIndustryName(e.target.value)}
+                  list="industry-list"
+                />
+                <datalist id="industry-list">
+                  {INDUSTRY_OPTIONS.map((i) => (
+                    <option key={i.code} value={i.name} />
+                  ))}
+                </datalist>
+              </div>
+
+              {error && <p className="error-text">{error}</p>}
+              <button className="primary-btn" disabled={loading}>
+                {loading ? "분석 중..." : "성공률 분석"}
+              </button>
+            </form>
+          </div>
         </div>
       ) : (
-        // 결과 대시보드 (Image 1)
-        <div className="dashboard-container">
-          <header className="dashboard-header">
-            <h1 className="dashboard-title">장사잘될지도</h1>
-            <div className="header-actions">
-              <p className="selected-info">
-                선택하신 지역은{" "}
-                <span className="highlight-text">{selectedDongName}</span>,
-                업종은 <span className="highlight-text">{selectedIndustryName}</span> 입니다.
+        <div className="dashboard">
+          {/* 헤더 */}
+          <div className="dash-header">
+            <h1>장사잘될지도</h1>
+            <div className="actions">
+              <div className="action-buttons">
+                <button className="ghost-btn" onClick={resetAll}>
+                  다시 입력하기
+                </button>
+                <button className="ghost-btn" onClick={() => window.print()}>
+                  PDF로 받기
+                </button>
+              </div>
+              <p className="selection-note">
+                선택하신 지역은 <b>{dongName}</b>, 업종은 <b>{industryName}</b> 입니다.
               </p>
-              <button className="pdf-button" onClick={resetApp}>
-                재분석하기
+            </div>
+          </div>
+
+          {/* 1행: 점수 + 매출 예측 */}
+          <div className="grid two equal-height">
+            <div className="card donut-card">
+              <h3 className="donut-title">점수</h3>
+              <div className="donut" style={donutStyle}>
+                <div className="donut-hole">
+                  <span>{cbs} 점</span>
+                </div>
+              </div>
+
+              {/* ▼ 점수 계산 요약 + 자세히 팝오버 */}
+              <div className="score-info">
+                <div className="score-brief">
+                  <button
+                    type="button"
+                    className="info-link"
+                    onClick={() => setOpenScoreInfo((v) => !v)}
+                    aria-expanded={openScoreInfo}
+                  >
+                    ⓘ 자세히
+                  </button>
+                </div>
+
+                {openScoreInfo && (
+                  <div className="score-popover" role="dialog" aria-label="점수 산정 기준">
+                    <div className="score-popover-head">
+                      <b>점수 산정 기준</b>
+                      <button
+                        className="score-popover-close"
+                        onClick={() => setOpenScoreInfo(false)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <p className="formula">
+                      점수 = (점포당 매출 금액 × <b>{WEIGHTS.점포당_매출_금액}</b>) +
+                      (안정성 지수 × <b>{WEIGHTS.안정성_지수}</b>) +
+                      (성장성 지수 × <b>{WEIGHTS.성장성_지수}</b>) +
+                      (입지 우위 지수 × <b>{WEIGHTS.입지_우위_지수}</b>)
+                    </p>
+
+                    <table className="table compact">
+                      <thead>
+                        <tr><th>요소</th><th>가중치</th><th>설명</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr><td>점포당 매출 금액</td><td>35%</td><td>동·업종 단위의 평균 매출</td></tr>
+                        <tr><td>안정성 지수</td><td>25%</td><td>폐업률, 변동성 등 리스크</td></tr>
+                        <tr><td>성장성 지수</td><td>20%</td><td>최근 3년간 매출 추세</td></tr>
+                        <tr><td>입지 우위 지수</td><td>20%</td><td>유동·접근성·경쟁 밀도</td></tr>
+                      </tbody>
+                    </table>
+
+                    <p className="muted small">
+                      ※ 데이터는 주기적으로 업데이트되며, 가중치는 모델 개선에 따라 조정될 수 있습니다.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="card">
+              <h3>매출 예측</h3>
+              <p className="revenue">
+                {prediction ? Number(prediction.prediction).toLocaleString() : "–"} 원
+              </p>
+            </div>
+          </div>
+
+          {/* 2행: 강점/약점 + 최종 전략 */}
+          <section className="insight-panel" aria-label="강점/약점 및 최종 전략">
+            <div className="insight-header">
+              <button
+                type="button"
+                className={`chip ${activeInsight === "strength" ? "active" : ""}`}
+                onClick={() => setActiveInsight("strength")}
+                aria-pressed={activeInsight === "strength"}
+              >
+                <span className="chip-dot" />
+                강점 요소
+              </button>
+              <button
+                type="button"
+                className={`chip ${activeInsight === "weakness" ? "active" : ""}`}
+                onClick={() => setActiveInsight("weakness")}
+                aria-pressed={activeInsight === "weakness"}
+              >
+                <span className="chip-dot" />
+                약점 요소
               </button>
             </div>
-          </header>
 
-          <main className="dashboard-main">
-            <div className="score-and-prediction">
-              <div className="score-card card">
-                <h3>점수</h3>
-                <div className="progress-circle-container" style={progressStyle}>
-                  <div className="progress-circle" data-progress={Math.round(cbsScore)}>
-                    <span className="score-text">
-                      {predictionResult ? Math.round(cbsScore) : "-"}점
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="prediction-card card">
-                <h3>매출 예측</h3>
-                <p className="prediction-value">
-                  {predictionResult
-                    ? Number(predictionResult.prediction).toLocaleString()
-                    : "-"}
-                  원
-                </p>
-                <div className="strength-weakness">
-                  {/* TODO: 강점/약점 요소는 백엔드 로직이 필요 */}
-                  <label className="checkbox-container">
-                    <input type="checkbox" checked={false} readOnly />
-                    <span className="checkmark"></span>
-                    강점 요소
-                  </label>
-                  <label className="checkbox-container">
-                    <input type="checkbox" checked={false} readOnly />
-                    <span className="checkmark"></span>
-                    약점 요소
-                  </label>
-                </div>
-              </div>
+            <div className="insight-body">
+              {activeInsight === "strength" ? (
+                <ul className="bullet-list">
+                  <li className="muted">강점 데이터는 추후 추가 예정</li>
+                </ul>
+              ) : (
+                <ul className="bullet-list">
+                  <li className="muted">약점 데이터는 추후 추가 예정</li>
+                </ul>
+              )}
             </div>
 
-            <div className="recommendations-grid">
-              {/* 지역별 추천 업종 */}
-              <div className="recommendation-card card">
-                <h3>
-                  <span className="highlight-text-small">{selectedDongName}</span>에서 성공확률 높은 업종 TOP 5
-                </h3>
-                <table className="recommendation-table">
-                  <thead>
-                    <tr>
-                      <th>업종</th>
+            <hr className="insight-divider" />
 
-                      <th>점수</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topIndustries.length > 0 ? (
-                      topIndustries.map((item, index) => (
-                        <tr key={index}>
-                          <td>{item.name}</td>
-
-                          <td>{item.cbs_score.toFixed(1)}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="3">추천 업종이 없습니다.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* 업종별 추천 지역 */}
-              <div className="recommendation-card card">
-                <h3>
-                  <span className="highlight-text-small">{selectedIndustryName}</span>으로 성공확률 높은 지역 TOP 5
-                </h3>
-                <table className="recommendation-table">
-                  <thead>
-                    <tr>
-                      <th>지역</th>
-
-                      <th>점수</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topRegions.length > 0 ? (
-                      topRegions.map((item, index) => (
-                        <tr key={index}>
-                          <td>{item.name}</td>
-
-                          <td>{item.cbs_score.toFixed(1)}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="3">추천 지역이 없습니다.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+            <div className="strategy-block">
+              <div className="strategy-heading">최종 전략</div>
+              <div className="strategy-content">
+                <p className="muted">※ 최종 전략은 추후 백엔드 연동 예정입니다.</p>
               </div>
             </div>
-          </main>
+          </section>
+
+          {/* 3행: TOP5 */}
+          <div className="grid two">
+            <div className="card">
+              <h3>{dongName}에서 성공확률 높은 업종 TOP 5</h3>
+              <table className="table">
+                <thead>
+                  <tr><th>업종</th><th>점포 수</th><th>점수</th></tr>
+                </thead>
+                <tbody>
+                  {topIndustries?.length ? (
+                    topIndustries.map((it, idx) => (
+                      <tr key={idx}>
+                        <td>{it.name}</td>
+                        <td>{it.store_count ?? "-"}</td>
+                        <td>{Number(it.cbs_score).toFixed(1)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan="3">추천 업종이 없습니다.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="card">
+              <h3>{industryName}으로 성공확률 높은 지역 TOP 5</h3>
+              <table className="table">
+                <thead>
+                  <tr><th>지역</th><th>점포 수</th><th>점수</th></tr>
+                </thead>
+                <tbody>
+                  {topRegions?.length ? (
+                    topRegions.map((it, idx) => (
+                      <tr key={idx}>
+                        <td>{it.name}</td>
+                        <td>{it.store_count ?? "-"}</td>
+                        <td>{Number(it.cbs_score).toFixed(1)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr><td colSpan="3">추천 지역이 없습니다.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 4행: 지도 + 리스트 */}
+          <div className="map-row">
+            <div className="map-placeholder card">
+              <div className="map-box">지도</div>
+            </div>
+            <div className="list-card card">
+              <h4>{dongName} · {industryName} 리스트</h4>
+              <p className="muted">※ 지도/리스트는 추후 연동 예정</p>
+            </div>
+          </div>
         </div>
       )}
     </div>
