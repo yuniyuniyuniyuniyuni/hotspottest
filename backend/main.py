@@ -178,9 +178,9 @@ def get_insight(industry_code: str = Query(..., description="서비스 업종 �
     df.fillna(0, inplace=True)
     features_to_exclude = [
         '기준_년분기_코드', '행정동_코드', '서비스_업종_코드', '당월_매출_금액', '점포당_매출_금액',
-        # CBS 계산에 사용된 중간 지표 및 최종 점수도 제외하는 것이 분석의 정확도를 높입니다.
         'stability_index', 'growth_index', 'location_advantage_index', 
-        'sales_norm', 'stability_norm', 'growth_norm', 'location_norm', 'cbs_score'
+        'sales_norm', 'stability_norm', 'growth_norm', 'location_norm', 'cbs_score',
+        '엑스좌표_값', '와이좌표_값'
     ]
     
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
