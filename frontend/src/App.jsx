@@ -118,7 +118,7 @@ export default function App() {
         <div className="landing-wrap">
           <div className="landing-card">
             <img src="/logo.png" alt="Logo" className="logo-image" />
-            <div className="logo-box">장사잘될지도 로고</div>
+            <div className="logo-box">장사잘될지도</div>
             <p className="subtitle">가나다라마바사아자차카타파하 서비스입니다.</p>
             <hr className="divider" />
             <form className="form" onSubmit={onAnalyze}>
@@ -244,7 +244,7 @@ export default function App() {
             </div>
 
             <div className="card">
-              <h3>매출 예측</h3>
+              <h3>월 매출 예측</h3>
               <p className="revenue">
                 {prediction ? Number(prediction.prediction).toLocaleString() : "–"} 원
               </p>
@@ -302,14 +302,13 @@ export default function App() {
               <h3>{dongName}에서 성공확률 높은 업종 TOP 5</h3>
               <table className="table">
                 <thead>
-                  <tr><th>업종</th><th>점포 수</th><th>점수</th></tr>
+                  <tr><th>업종</th><th>점수</th></tr>
                 </thead>
                 <tbody>
                   {topIndustries?.length ? (
                     topIndustries.map((it, idx) => (
                       <tr key={idx}>
                         <td>{it.name}</td>
-                        <td>{it.store_count ?? "-"}</td>
                         <td>{Number(it.cbs_score).toFixed(1)}</td>
                       </tr>
                     ))
@@ -324,19 +323,18 @@ export default function App() {
               <h3>{industryName}으로 성공확률 높은 지역 TOP 5</h3>
               <table className="table">
                 <thead>
-                  <tr><th>지역</th><th>점포 수</th><th>점수</th></tr>
+                  <tr><th>지역</th><th>점수</th></tr>
                 </thead>
                 <tbody>
                   {topRegions?.length ? (
                     topRegions.map((it, idx) => (
                       <tr key={idx}>
                         <td>{it.name}</td>
-                        <td>{it.store_count ?? "-"}</td>
                         <td>{Number(it.cbs_score).toFixed(1)}</td>
                       </tr>
                     ))
                   ) : (
-                    <tr><td colSpan="3">추천 지역이 없습니다.</td></tr>
+                    <tr><td colSpan="2">추천 지역이 없습니다.</td></tr>
                   )}
                 </tbody>
               </table>

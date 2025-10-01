@@ -24,15 +24,8 @@ def normalize(series: pd.Series) -> pd.Series:
         return pd.Series(50, index=series.index)
     return 100 * (series - min_val) / (max_val - min_val)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """서버 시작 시 데이터 로드 및 모든 점수 사전 계산 (정규화 로직 개선)"""
-    global predictions_db
-    try:
-        df = pd.read_csv(PREDICTIONS_PATH)
-        print(f"✅ Step 1: '{PREDICTIONS_PATH}'에서 원본 데이터 로드 완료 ({len(df)}개)")
-
-        # Step 2: CBS 각 구성 지표를 계산하여 새 컬럼으로 추가
+def calculate_cbs_scores(df):
+    # Step 2: CBS 각 구성 지표를 계산하여 새 컬럼으로 추가
         seoul_avg_op_months = df['서울_운영_영업_개월_평균']
         df['stability_index'] = (1 - df['폐업_률']) * 100 * (df['운영_영업_개월_평균'] / seoul_avg_op_months)
         change_indicator_vals = df['상권_변화_지표_명'].apply(map_commercial_change_indicator)
@@ -44,14 +37,12 @@ async def lifespan(app: FastAPI):
             df['점포_수'] == 0, 0,
             (df['총_유동인구_수'] / df['점포_수']) * (df['총_직장_인구_수'] / 10000) * 0.1
         )
-        print("✅ Step 2: 안정성, 성장성, 입지 우위 지수 계산 완료")
-
+    
         # Step 3: 각 지표를 0-100점으로 정규화
         df['sales_norm'] = normalize(df['점포당_매출_금액_예측'])
         df['stability_norm'] = normalize(df['stability_index'])
         df['growth_norm'] = normalize(df['growth_index'])
         df['location_norm'] = normalize(df['location_advantage_index'])
-        print("✅ Step 3: 모든 지표 0-100점 스케일로 정규화 완료")
 
         # Step 4: 정규화된 점수에 가중치를 적용하여 '원시' CBS 점수 계산
         df['cbs_raw_score'] = (
@@ -59,17 +50,24 @@ async def lifespan(app: FastAPI):
             df['stability_norm'] * 0.25 +
             df['growth_norm'] * 0.20 +
             df['location_norm'] * 0.20
-        )
-        print("✅ Step 4: 가중치 적용된 원시 CBS 점수 계산 완료")
-        
+        )        
         # ✨ Step 5 (NEW): 최종 CBS 점수를 다시 0-100으로 정규화
         df['cbs_score'] = normalize(df['cbs_raw_score'])
-        print("✅ Step 5: 최종 CBS 점수를 0-100 스케일로 재정규화 완료")
+        print("✅ Step 5: 최종 CBS 점수 계산 완료")
         
         # 원시 점수는 더 이상 필요 없으므로 삭제 (선택 사항)
         df = df.drop(columns=['cbs_raw_score'])
-
-        predictions_db = df
+        return df
+    
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """서버 시작 시 데이터 로드 및 모든 점수 사전 계산 (정규화 로직 개선)"""
+    global predictions_db
+    try:
+        df = pd.read_csv(PREDICTIONS_PATH)
+        print(f"✅ Step 1: '{PREDICTIONS_PATH}'에서 원본 데이터 로드 완료 ({len(df)}개)")
+        df.fillna(0, inplace=True)
+        predictions_db = calculate_cbs_scores(df)
         print("🚀 서버가 성공적으로 시작되었습니다.")
 
     except Exception as e:
