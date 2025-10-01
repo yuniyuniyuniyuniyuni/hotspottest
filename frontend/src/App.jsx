@@ -208,21 +208,54 @@ export default function App() {
                 <div className="donut-hole"><span>{cbs} 점</span></div>
               </div>
               <div className="score-info">
-                 <div className="score-brief">
-                  <button type="button" className="info-link" onClick={() => setOpenScoreInfo(v => !v)} aria-expanded={openScoreInfo}>ⓘ 자세히</button>
-                 </div>
-                 {openScoreInfo && (
-                   <div className="score-popover" role="dialog" aria-label="점수 산정 기준">
+                <div className="score-brief">
+                  <button
+                    type="button"
+                    className="info-link"
+                    onClick={() => setOpenScoreInfo((v) => !v)}
+                    aria-expanded={openScoreInfo}
+                  >
+                    ⓘ 자세히
+                  </button>
+                </div>
+
+                {openScoreInfo && (
+                  <div className="score-popover" role="dialog" aria-label="점수 산정 기준">
                     <div className="score-popover-head">
                       <b>점수 산정 기준</b>
-                      <button className="score-popover-close" onClick={() => setOpenScoreInfo(false)}>✕</button>
+                      <button
+                        className="score-popover-close"
+                        onClick={() => setOpenScoreInfo(false)}
+                      >
+                        ✕
+                      </button>
                     </div>
+
                     <p className="formula">
-                      점수 = (매출 × <b>{WEIGHTS.점포당_매출_금액*100}%</b>) + (안정성 × <b>{WEIGHTS.안정성_지수*100}%</b>) + (성장성 × <b>{WEIGHTS.성장성_지수*100}%</b>) + (입지 × <b>{WEIGHTS.입지_우위_지수*100}%</b>)
+                      점수 = (점포당 매출 금액 × <b>{WEIGHTS.점포당_매출_금액}</b>) +
+                      (안정성 지수 × <b>{WEIGHTS.안정성_지수}</b>) +
+                      (성장성 지수 × <b>{WEIGHTS.성장성_지수}</b>) +
+                      (입지 우위 지수 × <b>{WEIGHTS.입지_우위_지수}</b>)
                     </p>
-                   </div>
-                 )}
-               </div>
+
+                    <table className="table compact">
+                      <thead>
+                        <tr><th>요소</th><th>가중치</th><th>설명</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr><td>점포당 매출 금액</td><td>35%</td><td>동·업종 단위의 평균 매출</td></tr>
+                        <tr><td>안정성 지수</td><td>25%</td><td>폐업률, 변동성 등 리스크</td></tr>
+                        <tr><td>성장성 지수</td><td>20%</td><td>최근 3년간 매출 추세</td></tr>
+                        <tr><td>입지 우위 지수</td><td>20%</td><td>유동·접근성·경쟁 밀도</td></tr>
+                      </tbody>
+                    </table>
+
+                    <p className="muted small">
+                      ※ 데이터는 주기적으로 업데이트되며, 가중치는 모델 개선에 따라 조정될 수 있습니다.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="card">
               <h3>월 매출 예측</h3>
