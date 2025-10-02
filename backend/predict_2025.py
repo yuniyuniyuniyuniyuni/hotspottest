@@ -25,6 +25,7 @@ with open(FEATURE_PATH, 'r') as f:
 # 참고: 행정동, 업종과 같이 범주가 많은(고차원) 변수는 Target Encoding이나 CatBoost Encoding 사용 시 성능 향상 가능성이 높습니다.
 obj_cols = df.select_dtypes(include="object").columns.tolist()
 df = pd.get_dummies(df, columns=obj_cols, dummy_na=True)
+df["기준_년분기_코드"] = df["기준_년분기_코드"] % 10
 X_2025 = df.reindex(columns=feature_columns, fill_value=0)
 
 # 2. 예측할 데이터 전처리
@@ -40,7 +41,7 @@ results_df['점포당_매출_금액_예측'] = all_predictions_actual
 
 
 # 6. 최종 결과를 CSV 또는 다른 DB에 저장
-output_path = "../data/predict_db/predictions_2025_1.csv"
+output_path = "../data/predict_db/predictions_2025.csv"
 results_df.to_csv(output_path, index=False, encoding='utf-8-sig')
 
 print(f"배치 예측 완료! 결과가 {output_path} 에 저장되었습니다.")
