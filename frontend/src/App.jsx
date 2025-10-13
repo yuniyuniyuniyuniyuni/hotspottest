@@ -143,7 +143,7 @@ export default function App() {
     startAnalysis(selectedDong.code, selectedIndustry.code);
   };
 
-  const cbs = Math.round(Number(prediction?.cbs_score || 0));
+  const cbs = Number(prediction?.cbs_score || 0).toFixed(1);
   const donutStyle = {
     background: `conic-gradient(${MAIN_PURPLE} ${cbs * 3.6}deg, #EEEEEE ${cbs * 3.6}deg)`,
   };
