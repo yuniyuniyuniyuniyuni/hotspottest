@@ -17,6 +17,13 @@ const INDUSTRY_OPTIONS = [
   { code: "CS100010", name: "커피-음료" },
 ];
 
+const WEIGHTS = {
+  "점포당_매출_금액": "35%",
+  "안정성_지수": "25%",
+  "성장성_지수": "20%",
+  "입지_우위_지수": "20%",
+};
+
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://localhost:8000";
 const MAIN_PURPLE = "#8A60E6";
 
@@ -38,6 +45,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showResults, setShowResults] = useState(false);
+  const [avgScores, setAvgScores] = useState(null); 
 
   const [prediction, setPrediction] = useState(null);
   const [topIndustries, setTopIndustries] = useState([]);
@@ -74,6 +82,7 @@ export default function App() {
     setLoading(true);
     setShapInsight(null); // 분석 시작 시 이전 인사이트 초기화
     setAiReport(null);    // 분석 시작 시 이전 리포트 초기화
+    setAvgScores(null);
 
     // 상태 업데이트로 화면에 선택된 지역/업종 이름 즉시 반영
     setDongCode(dCode);
@@ -92,6 +101,7 @@ export default function App() {
         fetch(`${API_BASE}/recommend/regions?industry_code=${iCode}`),
         fetch(`${API_BASE}/get_insight?${params.toString()}`),
         fetch(`${API_BASE}/ai_insight?${params.toString()}`),
+        fetch(`${API_BASE}/stats?${params.toString()}`),
       ]);
 
       for (const res of responses) {
@@ -101,7 +111,7 @@ export default function App() {
         }
       }
       
-      const [predData, indData, regData, shapData, aiData] = await Promise.all(
+      const [predData, indData, regData, shapData, aiData, statsData] = await Promise.all(
         responses.map(res => res.json())
       );
       
@@ -110,6 +120,7 @@ export default function App() {
       setTopRegions(regData);
       setShapInsight(shapData);
       setAiReport(aiData);
+      setAvgScores(statsData);
       setShowResults(true);
 
     } catch (err) {
@@ -189,10 +200,46 @@ export default function App() {
               <div className="donut" style={donutStyle}>
                 <div className="donut-hole"><span>{cbs} 점</span></div>
               </div>
+              {avgScores && <p className="average-note">서울시 전체 평균: {avgScores.avg_cbs_score_seoul.toLocaleString()}점</p>}
               <div className="score-info">
                  <button type="button" className="info-link" onClick={() => setOpenScoreInfo(v => !v)}>ⓘ 자세히</button>
               </div>
-              {openScoreInfo && ( <div className="score-popover"> ... </div> )}
+              {openScoreInfo && (
+                <div className="score-popover" role="dialog" aria-label="점수 산정 기준">
+                  <div className="score-popover-head">
+                    <b>점수 산정 기준</b>
+                    <button
+                      className="score-popover-close"
+                      onClick={() => setOpenScoreInfo(false)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <p className="formula">
+                    점수 = (점포당 매출 금액 × <b>{WEIGHTS.점포당_매출_금액}</b>) +
+                    (안정성 지수 × <b>{WEIGHTS.안정성_지수}</b>) + <br />
+                    (성장성 지수 × <b>{WEIGHTS.성장성_지수}</b>) +
+                    (입지 우위 지수 × <b>{WEIGHTS.입지_우위_지수}</b>)
+                  </p>
+
+                  <table className="table compact">
+                    <thead>
+                      <tr><th>요소</th><th>가중치</th><th>설명</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>점포당 매출 금액</td><td>35%</td><td>동·업종 단위의 평균 매출</td></tr>
+                      <tr><td>안정성 지수</td><td>25%</td><td>폐업률, 변동성 등 리스크</td></tr>
+                      <tr><td>성장성 지수</td><td>20%</td><td>최근 3년간 매출 추세</td></tr>
+                      <tr><td>입지 우위 지수</td><td>20%</td><td>유동·접근성·경쟁 밀도</td></tr>
+                    </tbody>
+                  </table>
+
+                  <p className="muted small">
+                    ※ 데이터는 주기적으로 업데이트되며, 가중치는 모델에 따라 조정될 수 있습니다.
+                  </p>
+                </div>
+              )}
               <hr className="insight-divider" />
               <div className="insight-header">
                 <button type="button" className="chip active">CBS 결정 요인</button>
@@ -204,8 +251,47 @@ export default function App() {
               </div>
             </div>
             <div className="card revenue-card">
-              <h3>월 매출 예측</h3>
+              <div className="revenue-header">
+                <h3>월 매출 예측</h3>
+              </div>
               <div className="revenue"><p>{prediction ? Number(prediction.prediction).toLocaleString() : "–"} 원</p></div>
+              {avgScores && (
+                <div className="average-note-group">
+                  <p className="average-note">
+                    {prediction
+                      ? (() => {
+                          const num = Math.round(Number(prediction.prediction));
+                          if (isNaN(num)) return "– 원";
+                          if (num === 0) return "0원";
+
+                          const eok = Math.floor(num / 100000000);
+                          const man = Math.floor((num % 100000000) / 10000);
+                          const won = num % 10000;
+
+                          const parts = [];
+                          if (eok > 0) {
+                            parts.push(`${eok}억`);
+                          }
+                          if (man > 0) {
+                            parts.push(`${man}만`);
+                          }
+                          if (won > 0) {
+                            parts.push(`${won}`);
+                          }
+                          
+                          return `${parts.join(" ")}원`;
+                        })()
+                      : "– 원"}
+                  </p>
+                  <p className="average-note">
+                    {dongName} 전체 업종 평균: {avgScores.avg_sales_dong.toLocaleString()} 원
+                  </p>
+                  <p className="average-note">
+                    {industryName} 전체 지역 평균: {avgScores.avg_sales_industry.toLocaleString()} 원
+                  </p>
+                </div>
+              )}
+
               <hr className="insight-divider" />
               <div className="insight-header">
                   <button type="button" className={`chip ${activeInsight === "strength" ? "active" : ""}`} onClick={() => setActiveInsight("strength")}>강점 요소</button>
