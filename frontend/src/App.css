@@ -467,12 +467,13 @@ body, html, #root {
   margin: 8px 0 0 0;
 }
 
+
 .average-note-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin-top: 0.4rem;
-  margin-bottom: 1.3rem;
+  margin-bottom: 2.7rem;
 }
 
 /* average-note-group 안의 p 태그는 가운데 정렬을 하지 않음 */

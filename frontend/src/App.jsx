@@ -258,32 +258,6 @@ export default function App() {
               {avgScores && (
                 <div className="average-note-group">
                   <p className="average-note">
-                    {prediction
-                      ? (() => {
-                          const num = Math.round(Number(prediction.prediction));
-                          if (isNaN(num)) return "– 원";
-                          if (num === 0) return "0원";
-
-                          const eok = Math.floor(num / 100000000);
-                          const man = Math.floor((num % 100000000) / 10000);
-                          const won = num % 10000;
-
-                          const parts = [];
-                          if (eok > 0) {
-                            parts.push(`${eok}억`);
-                          }
-                          if (man > 0) {
-                            parts.push(`${man}만`);
-                          }
-                          if (won > 0) {
-                            parts.push(`${won}`);
-                          }
-                          
-                          return `${parts.join(" ")}원`;
-                        })()
-                      : "– 원"}
-                  </p>
-                  <p className="average-note">
                     {dongName} 전체 업종 평균: {avgScores.avg_sales_dong.toLocaleString()} 원
                   </p>
                   <p className="average-note">
