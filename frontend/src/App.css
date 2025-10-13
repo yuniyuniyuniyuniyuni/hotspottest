@@ -88,7 +88,7 @@ body, html, #root {
 /* === Grid & Card === */
 .grid { display: grid; gap: 1.2rem; }
 .grid.two { grid-template-columns: 1fr 1fr; }
-.grid.equal-height > .card { display: flex; flex-direction: column; justify-content: space-between; }
+.grid.equal-height > .card { display: flex; flex-direction: column; }
 
 .card {
   background: #fff;
@@ -111,6 +111,7 @@ body, html, #root {
   height: 160px;
   border-radius: 50%;
   margin: .2rem auto 0;
+  margin-bottom: 10px;
   background: conic-gradient(#8A60E6 0deg, #EEEEEE 0deg);
   display: flex;
   align-items: center;
@@ -130,6 +131,8 @@ body, html, #root {
   color: #8A60E6;
   transform: scaleX(-1);
 }
+
+.revenue-chart { padding: 0; }
 
 /* === 점수 정보(우측 하단) === */
 .score-info {
@@ -207,12 +210,14 @@ body, html, #root {
 .card:has(.revenue) h3 {
   text-align: left;
 }
+
+.revenue-header {
+  display: flex;
+  align-items: center;
+}
+
 .revenue {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
+  margin: 39px 0 39px 0;
   text-align: center;
   font-size: 1.7rem;
   font-weight: 800;
@@ -224,13 +229,14 @@ body, html, #root {
   border: 2px solid #8A60E6;
   border-radius: 22px;
   background: #fff;
-  padding: 16px 18px;
+  padding: 20px 18px;
 }
 .insight-header {
   display: flex;
   align-items: center;
   gap: 18px;
   margin-bottom: 10px;
+  margin-top: 10px;
 }
 .chip {
   display: inline-flex;
@@ -267,7 +273,7 @@ body, html, #root {
   margin: 14px 0;
 }
 .strategy-block { display: flex; flex-direction: column; gap: 8px; }
-.strategy-heading { font-weight: 700; color: #333; }
+.strategy-heading { font-weight: 700; color: #333; font-size: 20px; }
 .strategy-content { color: #555; }
 
 /* === 표 === */
@@ -303,4 +309,35 @@ body, html, #root {
   .landing-card { width: 92%; }
   .score-info { right: 8px; bottom: 8px; }
   .score-popover { width: min(360px, 92vw); }
+}
+
+.table td:last-child {
+  text-align: center; /* 내부 요소를 가운데 정렬 */
+  width: 120px; /* 버튼이 들어갈 충분한 너비 확보 */
+}
+
+/* '바로 분석' 버튼 스타일 */
+.table-action-btn {
+  background-color: #8A60E6; /* 메인 보라색 */
+  color: white; 
+  border: none; 
+  border-radius: 5px;
+  padding: 4px 7px; /* 내부 여백 */
+  font-weight: 600; /* 글자 굵기 */
+  font-size: 14px; /* 글자 크기 */
+  cursor: pointer; /* 마우스 올리면 손가락 모양 */
+  transition: background-color 0.2s ease-in-out, transform 0.1s ease; /* 부드러운 전환 효과 */
+}
+
+/* 버튼에 마우스를 올렸을 때 스타일 */
+.table-action-btn:hover {
+  background-color: #7148d1; /* 살짝 더 진한 보라색 */
+  transform: translateY(-1px); /* 살짝 위로 이동 */
+}
+
+/* 버튼을 비활성화했을 때 스타일 */
+.table-action-btn:disabled {
+  background-color: #cccccc; /* 회색 */
+  cursor: not-allowed; /* 클릭 불가 커서 */
+  transform: none;
 }
