@@ -12,11 +12,13 @@ FEATURE_PATH = "feature_columns.json"
 
 # 1) 데이터 로드
 # 경로가 현재 코드 위치 기준으로 되어 있으니, 실제 실행 환경에 맞게 확인해주세요.
-df = pd.read_csv("../data/predict_db/train_서울시_2024_분기별.csv")
+df = pd.read_csv("../data/original_db/train_서울시_2024_분기별.csv")
 df = df[df['유사_업종_점포_수'] > 0]  # 점포 수가 0인 행 제거
 df["점포당_매출_금액"] = df["당월_매출_금액"] / df["유사_업종_점포_수"]
 categorical_features = ['행정동_코드_명', '서비스_업종_코드_명', '상권_변화_지표', '상권_변화_지표_명']
 df = pd.get_dummies(df, columns=categorical_features, dummy_na=False)
+
+df["기준_년분기_코드"] = df["기준_년분기_코드"] % 10
 
 obj_ref_cols = df.select_dtypes(include="object").columns.tolist() # 인코딩 전 object 컬럼 목록 저장
 
@@ -46,7 +48,7 @@ joblib.dump(scaler, SCALER_PATH)
 # 8) 모델 학습
 model = XGBRegressor(
     tree_method="hist",        # 속도 최적화
-    n_estimators=1000,         # 충분히 큰 값으로 설정 (Early Stopping을 기대)
+    n_estimators=5000,         # 충분히 큰 값으로 설정 (Early Stopping을 기대)
     learning_rate=0.01,        # 더 작게 설정하여 정밀한 학습 유도
     max_depth=10,               # 기존 6에서 약간 증가시켜 복잡도 조정
     subsample=0.85,            # 샘플링 비율 조정 (기존 0.8)
