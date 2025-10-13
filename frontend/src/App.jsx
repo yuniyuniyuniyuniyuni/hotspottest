@@ -174,6 +174,7 @@ export default function App() {
               </div>
               {error && <p className="error-text">{error}</p>}
               <button className="primary-btn" type="submit" disabled={loading}>
+                {loading && <span className="btn-spinner" aria-hidden="true" />}
                 {loading ? "분석 중..." : "성공률 분석"}
               </button>
             </form>
