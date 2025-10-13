@@ -261,52 +261,73 @@ def get_insight(industry_code: str = Query(..., description="서비스 업종 �
 
     for _, row in cbs_results_df.head(5).iterrows():
         direction = "높음" if row['Actual_Value'] > row['Mean_Value'] else "낮음"
-        cbs_detail = (f"{row['Feature']}: {row['Actual_Value']:,.1f} "
-                           f"(평균보다 {direction}, 영향력: {row['Contribution_Percent']:.1f}%)")
+        cbs_detail = (f"{row['Feature']}: {row['Actual_Value']:,.0f} "
+                           f"(평균값: {row['Mean_Value']:,.0f}, 영향력: {row['Contribution_Percent']:.1f}%)")
         shap_result_text += "\n- " + cbs_detail
         cbs.append(cbs_detail)
 
     shap_result_text += "- 강점 Top 5 (매출을 올린 요인) -"
     for _, row in sales_results_df.head(5).iterrows():
         direction = "높음" if row['Actual_Value'] > row['Mean_Value'] else "낮음"
-        sales_detail = (f"{row['Feature']}: {row['Actual_Value']:,.1f} ")
+        sales_detail = (f"{row['Feature']}: {row['Actual_Value']:,.0f}  (평균값: {row['Mean_Value']:,.0f}) ")
         shap_result_text += "\n- " + sales_detail
         strengths.append(sales_detail)
         
     shap_result_text += "- 약점 Top 5 (매출을 낮춘 요인) -"
     for _, row in sales_results_df.tail(5).iterrows():
         direction = "높음" if row['Actual_Value'] > row['Mean_Value'] else "낮음"
-        sales_detail = (f"{row['Feature']}: {row['Actual_Value']:,.1f} ")
+        sales_detail = (f"{row['Feature']}: {row['Actual_Value']:,.0f}  (평균값: {row['Mean_Value']:,.0f}) ")
         shap_result_text += "\n- " + sales_detail
         weaknesses.append(sales_detail)
 
     return {
+        "dong_name": dong_name,
+        "industry_name": industry_name,
         "cbs": cbs,
         "strengths": strengths,
         "weaknesses": weaknesses,
-        "shap_result_text": shap_result_text
-    } 
+        # shap_result_text는 이제 프롬프트에 직접 사용되지 않지만, 디버깅 등을 위해 유지
+        "shap_result_text": shap_result_text 
+    }
     
 @app.get("/ai_insight", summary="AI 기반 상권 분석 리포트")
 def ai_insight(industry_code: str = Query(..., description="서비스 업종 코드"), dong_code: str = Query(..., description="행정동 코드")):
-    insight = get_insight(industry_code, dong_code)
-    shap_result_text = insight["shap_result_text"]
+    insight_data = get_insight(industry_code, dong_code)
     
-    # ★★★ 프롬프트 수정: JSON 형식 출력을 명시적으로 요구 ★★★
+    def format_list_for_prompt(items: list) -> str:
+        """리스트의 각 항목을 줄바꿈 문자로 연결하여 하나의 문자열로 만듭니다."""
+        return "\n".join([f"- {item}" for item in items])
+
+    cbs_factors_str = format_list_for_prompt(insight_data["cbs"])
+    strengths_str = format_list_for_prompt(insight_data["strengths"])
+    weaknesses_str = format_list_for_prompt(insight_data["weaknesses"])
+
+    # ★★★★★ [수정] AI가 명확하게 인식할 수 있도록 프롬프트 구조 개선 ★★★★★
     prompt = f"""
     당신은 대한민국 최고의 상권분석 전문가입니다. 예비 창업자에게 조언하는 역할입니다.
-    아래 분석 데이터를 바탕으로, 전문적이지만 이해하기 쉬운 최종 컨설팅 의견을 작성해주세요.
+    아래 [분석 정보]와 [핵심 분석 데이터]를 바탕으로, 전문적이지만 이해하기 쉬운 최종 컨설팅 의견을 작성해주세요.
 
-    [분석 데이터]
-    {shap_result_text}
+    [분석 정보]
+    - 분석 지역: {insight_data["dong_name"]}
+    - 분석 업종: {insight_data["industry_name"]}
+
+    [핵심 분석 데이터]
+    1. CBS 점수 결정 요인 (영향력 순):
+    {cbs_factors_str}
+
+    2. 예상 매출에 긍정적 영향을 준 요인 (강점):
+    {strengths_str}
+
+    3. 예상 매출에 부정적 영향을 준 요인 (약점):
+    {weaknesses_str}
 
     [작성 가이드라인]
-    1. **결론 요약:** 이 상권의 핵심 특징과 기회/위험 요인을 한두 문장으로 요약합니다.
-    2. **CBS 결정 요인 분석:** 각 CBS 결정 요인중 상위 3가지가 상권에 미치는 영향과 그 이유를 설명합니다.
-    3. **강점 및 약점 평가:** 매출을 높인 강점과 매출을 낮춘 약점을 각각 2-3가지씩 구체적으로 분석합니다.
-    4. **최종 전략 제언:** 위 분석을 종합하여, 이 상권에 진입하려는 예비 창업자에게 구체적이고 실행 가능한 조언을 한두 문장으로 제시합니다.
+    1. **결론 요약 (summary):** [분석 정보]와 [핵심 분석 데이터]를 종합하여 이 상권의 핵심 특징, 기회, 위험 요인을 한두 문장으로 요약합니다.
+    2. **CBS 결정 요인 분석 (cbs_analysis):** [핵심 분석 데이터]의 'CBS 점수 결정 요인' 중 상위 3가지가 이 상권의 종합적인 매력도에 어떤 영향을 미치는지 이유를 들어 설명합니다.
+    3. **강점 및 약점 평가 (evaluation):** [핵심 분석 데이터]의 '강점'과 '약점' 데이터를 각각 2~3가지씩 활용하여, 실제 창업 시 어떤 점을 활용하고 어떤 점을 보완해야 할지 분석합니다.
+    4. **최종 전략 제언 (strategy):** 모든 분석을 종합하여, 이 상권에 진입하려는 예비 창업자에게 구체적이고 실행 가능한 조언을 한두 문장으로 제시합니다.
     5. 답변은 반드시 한글로, 친절하고 전문가적인 톤으로 작성해주세요.
-    6. 최종 결과는 반드시 다음 키를 포함하는 JSON 형식으로만 응답해주세요: "summary", "cbs_analysis", "evaluation", "strategy"
+    6. **최종 결과는 반드시 다음 키를 포함하는 JSON 형식으로만 응답해주세요: "summary", "cbs_analysis", "evaluation", "strategy"**
     """
 
     try:
@@ -353,6 +374,28 @@ def ai_insight(industry_code: str = Query(..., description="서비스 업종 코
         
     return {
         "report": ai_interpretation
+    }
+
+@app.get("/stats", summary="주요 통계 조회")
+def get_stats(dong_code: str = Query(..., description="행정동 코드"), industry_code: str = Query(..., description="서비스 업종 코드")):
+    if predictions_db is None:
+        raise HTTPException(status_code=503, detail="서버 리소스가 준비되지 않았습니다.")
+
+    # 1. 서울시 전체의 평균 CBS 점수
+    avg_cbs_score_seoul = predictions_db['cbs_score'].mean()
+
+    # 2. 선택된 지역(동)의 모든 업종 평균 매출
+    dong_df = predictions_db[predictions_db['행정동_코드'] == int(dong_code)]
+    avg_sales_dong = dong_df['점포당_매출_금액_예측'].mean() if not dong_df.empty else 0
+
+    # 3. 선택된 업종의 모든 지역 평균 매출
+    industry_df = predictions_db[predictions_db['서비스_업종_코드'] == industry_code]
+    avg_sales_industry = industry_df['점포당_매출_금액_예측'].mean() if not industry_df.empty else 0
+
+    return {
+        "avg_cbs_score_seoul": round(avg_cbs_score_seoul, 1),
+        "avg_sales_dong": round(avg_sales_dong),
+        "avg_sales_industry": round(avg_sales_industry)
     }
 
 if __name__ == "__main__":

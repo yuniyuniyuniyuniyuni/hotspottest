@@ -98,7 +98,7 @@ body, html, #root {
   border: 1px solid #f1f1f1;
 }
 .card h3 {
-  margin: 0 0 .8rem;
+  margin: .3rem 0 .8rem;
   color: #8A60E6;
   text-align: left;  /* 제목 왼쪽 정렬 */
 }
@@ -138,7 +138,7 @@ body, html, #root {
 .score-info {
   position: absolute;
   right: 12px;
-  top: 18px;
+  top: 10px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -173,34 +173,145 @@ body, html, #root {
   color:#8A60E6;
   font-weight:800;
   cursor:pointer;
-  padding:.1rem .2rem;
+  padding:1.4rem .8rem;
 }
 .info-link:hover { text-decoration: underline; }
 
 .score-popover {
-  width: 380px;
+  position: absolute;
+  top: 50px;
+  right: 12px;
+  z-index: 10;
+  width: 420px; /* 너비를 조금 더 확보 */
   max-width: 90vw;
   background:#fff;
-  border:1px solid #EFEAFD;
-  border-radius: 14px;
-  box-shadow: 0 12px 32px rgba(0,0,0,.16);
-  padding: 12px 20px 10px;
-  animation: popIn .12s ease-out;
-  color: #000;
+  border: 1px solid #EAEAEA;
+  border-radius: 16px; /* 모서리를 더 부드럽게 */
+  box-shadow: 0 16px 40px rgba(0,0,0,.18); /* 그림자를 더 자연스럽게 */
+  padding: 16px 24px 20px; /* 내부 여백 조정 */
+  animation: popIn .15s ease-out;
+  color: #333; /* 기본 텍스트 색상 지정 */
+  display: flex; /* 내부 요소 정렬을 위해 flex 사용 */
+  flex-direction: column;
+  gap: 12px; /* 요소 사이의 간격 */
 }
+
 .score-popover-head {
   display: flex;
   justify-content: space-between;
-  margin-top: 5px;
+  align-items: center;
+  margin-bottom: 4px; /* 헤더 아래 여백 */
 }
+
+.score-popover-head b {
+  font-size: 1.1rem; /* 제목 폰트 크기 조정 */
+  color: #000;
+}
+
 .score-popover-close {
   display: flex;
-  background-color: #ffffff;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: transparent;
   border: none;
+  font-size: 1.2rem;
+  color: #888;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
 }
+
+.score-popover-close:hover {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+/* 점수 계산 공식 스타일 */
+.score-popover .formula {
+  background-color: #f7f5ff; /* 연한 보라색 배경 */
+  border: 1px solid #e6e2f8;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  color: #444;
+  line-height: 1.6;
+}
+
+/* 공식 안의 가중치(%) 강조 */
+.score-popover .formula b {
+  color: #8A60E6; /* 메인 색상으로 강조 */
+  font-weight: 700;
+}
+
+/* 팝업 내 테이블 스타일 재정의 */
+.score-popover .table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  table-layout: fixed;
+}
+
+.score-popover .table th,
+.score-popover .table td {
+  padding: 10px 8px;
+  text-align: center;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.9rem;
+}
+
+/* 1번째 열 (요소) 너비 설정 */
+.score-popover .table th:nth-child(1),
+.score-popover .table td:nth-child(1) {
+  width: 30%;
+}
+
+/* 2번째 열 (가중치) 너비 설정 */
+.score-popover .table th:nth-child(2),
+.score-popover .table td:nth-child(2) {
+  width: 18%;
+}
+
+/* 테이블 헤더 스타일 */
+.score-popover .table th {
+  background-color: #fafafa;
+  color: #555;
+  font-weight: 600;
+  padding: 12px 8px;
+  text-align: center;
+}
+
+/* 테이블 가중치(%) 열 스타일 */
+.score-popover .table td:nth-child(2) {
+  text-align: center;
+  font-weight: 600;
+  color: #333;
+}
+
+/* 테이블 설명 열 스타일 */
+.score-popover .table td:nth-child(3) {
+  color: #666;
+}
+
+/* 마지막 줄 경계선 제거 */
+.score-popover .table tr:last-child td {
+  border-bottom: none;
+}
+
+/* 안내 문구 스타일 */
+.score-popover .muted.small {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #999;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0; /* 위쪽과 구분선 추가 */
+}
+
 @keyframes popIn {
-  from { transform: translateY(6px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from { transform: scale(0.95) translateY(6px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 /* === 매출 예측 — 제목 왼쪽, 금액만 중앙 === */
@@ -213,17 +324,23 @@ body, html, #root {
 
 .revenue-header {
   display: flex;
-  align-items: center;
+  text-align: center;
+  justify-content: space-between;
 }
 
 .revenue {
-  margin: 39px 0 39px 0;
+  margin: 39px 0 0 0;
   text-align: center;
   font-size: 1.7rem;
   font-weight: 800;
   color: #333;
 }
 
+.revenue p{
+  margin: 8px 0 0 0;
+  font-size: 2.5rem;
+  color: #555;
+}
 /* === 인사이트 패널 === */
 .insight-panel {
   border: 2px solid #8A60E6;
@@ -340,4 +457,32 @@ body, html, #root {
   background-color: #cccccc; /* 회색 */
   cursor: not-allowed; /* 클릭 불가 커서 */
   transform: none;
+}
+
+
+.average-note {
+  font-size: 0.8rem;
+  color: #666;
+  text-align: center;
+  margin: 8px 0 0 0;
+}
+
+
+.average-note-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 0.4rem;
+  margin-bottom: 2.7rem;
+}
+
+/* average-note-group 안의 p 태그는 가운데 정렬을 하지 않음 */
+.average-note-group .average-note {
+  text-align: center;
+  margin: 0;
+}
+
+.revenue-card .average-note p {
+  font-size: 0.8rem;
+  color: #666;
 }
