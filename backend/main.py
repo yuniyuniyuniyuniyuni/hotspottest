@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import numpy as np
 from dotenv import load_dotenv
+import json
 import os
 from openai import OpenAI
 load_dotenv() 
@@ -57,7 +58,7 @@ def calculate_cbs_scores(df):
         )        
         # ✨ Step 5 (NEW): 최종 CBS 점수를 다시 0-100으로 정규화
         df['cbs_score'] = normalize(df['cbs_raw_score'])
-        print("✅ Step 5: 최종 CBS 점수 계산 완료")
+        print("✅ 최종 CBS 점수 계산 완료")
         
         # 원시 점수는 더 이상 필요 없으므로 삭제 (선택 사항)
         df = df.drop(columns=['cbs_raw_score'])
@@ -70,7 +71,7 @@ async def lifespan(app: FastAPI):
     global predictions_db, numeric_features
     try:
         df = pd.read_csv(PREDICTIONS_PATH)
-        print(f"✅ Step 1: '{PREDICTIONS_PATH}'에서 원본 데이터 로드 완료 ({len(df)}개)")
+        print(f"✅ '{PREDICTIONS_PATH}'에서 원본 데이터 로드 완료 ({len(df)}개)")
         df.fillna(0, inplace=True)
         growth_map = {'상권확장': 1.5, '다이나믹': 1.2, '정체': 1.0, '상권축소': 0.8}
         df['상권_변화_가중치'] = df['상권_변화_지표'].map(growth_map)
@@ -171,83 +172,127 @@ def get_insight(industry_code: str = Query(..., description="서비스 업종 �
     
     if predictions_db is None:
         raise HTTPException(status_code=503, detail="서버 리소스가 준비되지 않았습니다.")
-    df = predictions_db.copy()
-    df = df[(df['행정동_코드'] == int(dong_code)) & (df['서비스_업종_코드'] == industry_code)]
-    if df.empty:
-        raise HTTPException(status_code=404, detail="선택한 지역과 업종에 대한 데이터를 찾을 수 없습니다.")
-    df.fillna(0, inplace=True)
+
+    # --- 1. 분석에 사용할 피처(feature) 목록 정의 ---
     features_to_exclude = [
         '기준_년분기_코드', '행정동_코드', '서비스_업종_코드', '당월_매출_금액', '점포당_매출_금액',
         'stability_index', 'growth_index', 'location_advantage_index', 
         'sales_norm', 'stability_norm', 'growth_norm', 'location_norm', 'cbs_score',
-        '엑스좌표_값', '와이좌표_값'
+        '엑스좌표_값', '와이좌표_값', '행정동_코드_명', '서비스_업종_코드_명', '상권_변화_지표', '상권_변화_지표_명'
     ]
-    
-    numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
-    features = [f for f in numeric_cols if f not in features_to_exclude]
-    X = df[features]
-    
-    if X.empty or len(X.columns) == 0:
+    all_numeric_features = predictions_db.select_dtypes(include=np.number).columns.tolist()
+    features = [f for f in all_numeric_features if f not in features_to_exclude]
+
+    # --- 2. 배경 데이터(전체)와 분석 대상 데이터(특정 행) 분리 ---
+    background_data = predictions_db[features].fillna(0)
+    instance_df = predictions_db[
+        (predictions_db['행정동_코드'] == int(dong_code)) & 
+        (predictions_db['서비스_업종_코드'] == industry_code)
+    ]
+    cbs_features = ['점포당_매출_금액_예측', '서울_운영_영업_개월_평균', '폐업_률', '운영_영업_개월_평균', '개업_율', '상권_변화_가중치', '총_유동인구_수', '점포_수', '총_직장_인구_수']
+    background_data_cbs = background_data[cbs_features]
+    if instance_df.empty:
+        raise HTTPException(status_code=404, detail="선택한 지역과 업종에 대한 데이터를 찾을 수 없습니다.")
+
+    instance_to_explain_cbs = instance_df[cbs_features].fillna(0)
+    instance_to_explain = instance_df[features].fillna(0)
+    if instance_to_explain.empty:
         raise HTTPException(status_code=500, detail="분석할 수치 데이터를 찾을 수 없습니다.")
 
+    # --- 3. SHAP 분석을 위한 모델 함수 정의 (수정 없음) ---
     def calculate_cbs_for_shap_local(X_values: np.ndarray) -> np.ndarray:
-        # 컬럼 이름으로 전역 변수 대신 현재 분석 대상인 'X.columns'를 사용합니다.
-        row_df = pd.DataFrame(X_values, columns=X.columns)
-        
-        epsilon = 1e-6 # 0으로 나누는 것을 방지
-        
-        # seoul_avg_op_months가 없을 수 있으므로 전체 데이터베이스의 평균을 사용하거나 안전한 기본값을 설정
-        seoul_avg_op_months = predictions_db['운영_영업_개월_평균'].mean()  # type: ignore
-        if seoul_avg_op_months == 0: seoul_avg_op_months = 1
-
-        stability_index = (1 - row_df['폐업_률']) * 100 * (row_df['운영_영업_개월_평균'] / seoul_avg_op_months)
+        row_df = pd.DataFrame(X_values, columns=features)
+        epsilon = 1e-6
+        seoul_avg_op_months = row_df['서울_운영_영업_개월_평균']
+        stability_index = (1 - row_df['폐업_률']) * 100 * (row_df['운영_영업_개월_평균'] / (seoul_avg_op_months + epsilon))
         growth_index = (row_df['개업_율'] / (row_df['폐업_률'] + epsilon)) * row_df['상권_변화_가중치'] * 100
         locational_advantage_index = (row_df['총_유동인구_수'] / (row_df['점포_수'] + epsilon)) * (row_df['총_직장_인구_수'] / 10000) * 0.1
         predicted_sales = row_df['점포당_매출_금액_예측']
-        
         cbs_scores = (predicted_sales * 0.35) + (stability_index * 0.25) + (growth_index * 0.20) + (locational_advantage_index * 0.20)
-        return cbs_scores.to_numpy() # 결과를 numpy 배열로 반환
+        return cbs_scores.to_numpy()
 
-    instance_to_explain = X.iloc[[0]]
-    # 수정된 local 함수를 Explainer에 전달합니다.
-    explainer = shap.Explainer(calculate_cbs_for_shap_local, X)
-    shap_values = explainer(instance_to_explain)
-    
-    results_df = pd.DataFrame({
-        'Feature': X.columns,
+    # --- 4. SHAP 분석 실행 ---
+    cbs_explainer = shap.Explainer(calculate_cbs_for_shap_local, background_data_cbs)
+    sales_explainer = shap.Explainer(calculate_cbs_for_shap_local, background_data)
+    shap_values_cbs = cbs_explainer(instance_to_explain_cbs)
+    shap_values_sales = sales_explainer(instance_to_explain)
+
+    # --- 5. 분석 결과 정리 및 텍스트 리포트 생성 (### 수정된 부분 ###) ---
+
+    # 분석 대상인스턴의 SHAP 값 배열
+    cbs_values_instance = shap_values_cbs.values[0]
+    sales_values_instance = shap_values_sales.values[0]
+
+    # 영향력의 총합(절대값 기준) 계산
+    total_impact = np.abs(cbs_values_instance).sum()
+    epsilon = 1e-6 # 0으로 나누는 것을 방지
+
+    cbs_results_df = pd.DataFrame({
+        'Feature': cbs_features,
+        'Actual_Value': instance_to_explain_cbs.iloc[0].values,
+        'Mean_Value': background_data_cbs.mean().values,
+        'SHAP_Value': cbs_values_instance,
+        # 각 피처의 영향력 기여도(%) 계산
+        'Contribution_Percent': (cbs_values_instance / (total_impact + epsilon)) * 100
+    }).sort_values(by='SHAP_Value', key=abs, ascending=False).reset_index(drop=True)
+
+    sales_results_df = pd.DataFrame({
+        'Feature': background_data.columns,
         'Actual_Value': instance_to_explain.iloc[0],
-        'Mean_Value': X.mean(),
-        'SHAP_Value': shap_values.values[0]
+        'Mean_Value': background_data.mean(),
+        'SHAP_Value': shap_values_sales.values[0]
     }).sort_values(by='SHAP_Value', ascending=False)
+    
+    base_score = shap_values_cbs.base_values[0]
+    predicted_score = base_score + cbs_results_df['SHAP_Value'].sum()
+
     strengths = []
     weaknesses = []
-    shap_result_text = f"""- 분석 대상: {dong_code} / {industry_code}
-    - 기본 점수(평균 CBS): {shap_values.base_values[0]:,.0f}
-    - 최종 예측 CBS 점수: {explainer.model(instance_to_explain.values)[0]:,.0f}
-    - 강점 Top 5 (점수를 올린 요인):
+    cbs = []
+
+    dong_name = instance_df.iloc[0]['행정동_코드_명']
+    industry_name = instance_df.iloc[0]['서비스_업종_코드_명']
+
+    shap_result_text = f"""- 분석 대상: {dong_name} / {industry_name}
+    - 기본 점수(전체 상권 평균): {base_score:,.0f}점
+    - 최종 예측 점수: {predicted_score:,.0f}점
+    - cbs 결정 요인
     """
-    
-    for _, row in results_df.head(5).iterrows():
-        direction = "평균보다 높음" if row['Actual_Value'] > row['Mean_Value'] else "평균보다 낮음"
-        strengths.append(f"  - {row['Feature']}: {row['Actual_Value']:,.2f} ({direction})\n")
-        shap_result_text += f"  - {row['Feature']}: {row['Actual_Value']:,.2f} ({direction})\n"
+
+    for _, row in cbs_results_df.head(5).iterrows():
+        direction = "높음" if row['Actual_Value'] > row['Mean_Value'] else "낮음"
+        cbs_detail = (f"{row['Feature']}: {row['Actual_Value']:,.1f} "
+                           f"(평균보다 {direction}, 영향력: {row['Contribution_Percent']:.1f}%)")
+        shap_result_text += "\n- " + cbs_detail
+        cbs.append(cbs_detail)
+
+    shap_result_text += "- 강점 Top 5 (매출을 올린 요인) -"
+    for _, row in sales_results_df.head(5).iterrows():
+        direction = "높음" if row['Actual_Value'] > row['Mean_Value'] else "낮음"
+        sales_detail = (f"{row['Feature']}: {row['Actual_Value']:,.1f} ")
+        shap_result_text += "\n- " + sales_detail
+        strengths.append(sales_detail)
         
-    shap_result_text += "- 약점 Top 5 (점수를 내린 요인):\n"
-    for _, row in results_df.tail(5).sort_values(by='SHAP_Value', ascending=True).iterrows():
-        direction = "평균보다 높음" if row['Actual_Value'] > row['Mean_Value'] else "평균보다 낮음"
-        weaknesses.append(f"  - {row['Feature']}: {row['Actual_Value']:,.2f} ({direction})\n")
-        shap_result_text += f"  - {row['Feature']}: {row['Actual_Value']:,.2f} ({direction})\n"
+    shap_result_text += "- 약점 Top 5 (매출을 낮춘 요인) -"
+    for _, row in sales_results_df.tail(5).iterrows():
+        direction = "높음" if row['Actual_Value'] > row['Mean_Value'] else "낮음"
+        sales_detail = (f"{row['Feature']}: {row['Actual_Value']:,.1f} ")
+        shap_result_text += "\n- " + sales_detail
+        weaknesses.append(sales_detail)
 
     return {
+        "cbs": cbs,
         "strengths": strengths,
         "weaknesses": weaknesses,
-        "shap_result_text": shap_result_text,
-    }
+        "shap_result_text": shap_result_text
+    } 
     
 @app.get("/ai_insight", summary="AI 기반 상권 분석 리포트")
 def ai_insight(industry_code: str = Query(..., description="서비스 업종 코드"), dong_code: str = Query(..., description="행정동 코드")):
     insight = get_insight(industry_code, dong_code)
     shap_result_text = insight["shap_result_text"]
+    
+    # ★★★ 프롬프트 수정: JSON 형식 출력을 명시적으로 요구 ★★★
     prompt = f"""
     당신은 대한민국 최고의 상권분석 전문가입니다. 예비 창업자에게 조언하는 역할입니다.
     아래 분석 데이터를 바탕으로, 전문적이지만 이해하기 쉬운 최종 컨설팅 의견을 작성해주세요.
@@ -257,43 +302,54 @@ def ai_insight(industry_code: str = Query(..., description="서비스 업종 코
 
     [작성 가이드라인]
     1. **결론 요약:** 이 상권의 핵심 특징과 기회/위험 요인을 한두 문장으로 요약합니다.
-    2. **강점 분석:** 점수를 올린 가장 중요한 요인 2~3가지를 선택해,
-    - (a) 구체적인 데이터 지표 설명 →
-    - (b) 해당 지표가 창업자에게 어떤 의미가 있는지 해석 →
-    - (c) 실제 전략적 시사점 제시
-    의 구조로 각각 서술합니다.
-    3. **약점 분석:** 점수를 내린 가장 중요한 요인 2~3가지를 선택해,
-    동일하게 (a) 지표 → (b) 의미 → (c) 시사점 구조로 자세히 분석합니다.
+    2. **CBS 결정 요인 분석:** 각 CBS 결정 요인중 상위 3가지가 상권에 미치는 영향과 그 이유를 설명합니다.
+    3. **강점 및 약점 평가:** 매출을 높인 강점과 매출을 낮춘 약점을 각각 2-3가지씩 구체적으로 분석합니다.
     4. **최종 전략 제언:** 위 분석을 종합하여, 이 상권에 진입하려는 예비 창업자에게 구체적이고 실행 가능한 조언을 한두 문장으로 제시합니다.
     5. 답변은 반드시 한글로, 친절하고 전문가적인 톤으로 작성해주세요.
+    6. 최종 결과는 반드시 다음 키를 포함하는 JSON 형식으로만 응답해주세요: "summary", "cbs_analysis", "evaluation", "strategy"
     """
 
-    # ★★★ 최종 수정된 부분 ★★★
-    # --- OpenAI API 호출 ---
     try:
-        # os.environ.get()을 사용하여 환경 변수에서 API 키를 안전하게 가져옵니다.
         api_key = os.environ.get("OPENAI_API_KEY")
         
         if not api_key:
-            # 환경 변수에 키가 없는 경우에만 경고 메시지를 보여줍니다.
-            ai_interpretation = "OpenAI API 키가 환경 변수에 설정되지 않았습니다. 터미널에서 'export OPENAI_API_KEY=\"sk-...\"' 명령어를 실행해주세요."
-        else:
-            client = OpenAI(api_key=api_key) # type: ignore
-            
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "당신은 대한민국 최고의 상권분석 전문가입니다."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.5,
-            )
-            ai_interpretation = response.choices[0].message.content
-            print("✅ 7. AI 컨설턴트 분석을 성공적으로 생성했습니다.")
+            return {
+                "report": {
+                    "summary": "AI 분석 실패",
+                    "cbs_analysis": "OpenAI API 키가 설정되지 않았습니다.",
+                    "evaluation": "서버 환경 변수를 확인해주세요.",
+                    "strategy": ""
+                }
+            }
+
+        client = OpenAI(api_key=api_key)
+        
+        # ★★★ API 호출 수정: JSON 모드 활성화 ★★★
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": "You are a top commercial district analyst in South Korea. Your response must be in JSON object format."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5,
+        )
+        # OpenAI 응답이 JSON 문자열이므로 파싱해서 반환
+        ai_response_dict = json.loads(response.choices[0].message.content) #type: ignore
+        keys = ["summary", "cbs_analysis", "evaluation", "strategy"]
+        default_message = "AI가 해당 항목에 대한 분석을 생성하지 못했습니다."
+        
+        ai_interpretation = {key: ai_response_dict.get(key, default_message) for key in keys}
+        print("✅ AI 컨설턴트 분석을 성공적으로 생성했습니다.")
 
     except Exception as e:
         print(f"API 호출 중 오류 발생: {e}")
-        ai_interpretation = f"API 호출 중 오류가 발생하여 자동 해석을 생성하지 못했습니다: {e}"
+        ai_interpretation = {
+            "summary": "AI 분석 중 오류 발생",
+            "cbs_analysis": f"오류: {e}",
+            "evaluation": "잠시 후 다시 시도해주세요.",
+            "strategy": ""
+        }
         
     return {
         "report": ai_interpretation
