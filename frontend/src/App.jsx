@@ -217,7 +217,7 @@ export default function App() {
                   </div>
 
                   <p className="formula">
-                    점수 = (점포당 매출 금액 × <b>{WEIGHTS.점포당_매출_금액}</b>) +
+                     CBS 점수 = (점포당 매출 금액 × <b>{WEIGHTS.점포당_매출_금액}</b>) +
                     (안정성 지수 × <b>{WEIGHTS.안정성_지수}</b>) + <br />
                     (성장성 지수 × <b>{WEIGHTS.성장성_지수}</b>) +
                     (입지 우위 지수 × <b>{WEIGHTS.입지_우위_지수}</b>)
@@ -242,7 +242,7 @@ export default function App() {
               )}
               <hr className="insight-divider" />
               <div className="insight-header">
-                <button type="button" className="chip active">CBS 결정 요인</button>
+                <button type="button" className="chip active">CBS 점수 결정 요인</button>
               </div>
               <div className="insight-body">
                 {shapInsight ? (<ul className="bullet-list">
