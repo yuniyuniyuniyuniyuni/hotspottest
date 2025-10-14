@@ -23,7 +23,9 @@ body, html, #root {
   align-items: center;
 }
 .logo-box { font-size: 1.8rem; font-weight: 700; color: #8A60E6; margin-bottom: 0.8rem; }
-.subtitle { font-size: 0.95rem; color: #555; margin-bottom: 1.5rem; }
+.subtitle {  font-size: 0.95rem;  color: #555;  margin-bottom: 1.5rem;}
+.subtitle:first-of-type {  margin-top: 0.2rem; }
+
 .divider { width: 100%; height: 1px; background: #EEEEEE; border: none; margin: 1.5rem 0; }
 .logo-image { width: 150px; height: auto; margin-bottom: 1rem; margin-bottom: 0px; }
 
@@ -71,7 +73,7 @@ body, html, #root {
 .dash-header { display: flex; flex-direction: column; align-items: center; gap: .6rem; }
 .dash-header h1 { margin: 0; font-size: 2rem; font-weight: 800; color: #8A60E6; }
 .actions { display: flex; flex-direction: column; align-items: center; gap: .6rem; }
-.selection-note { font-size: 1rem; color: #555; font-weight: 500; text-align: center; }
+.selection-note { font-size: 1.3rem; color: #555; font-weight: 500; text-align: center; }
 .action-buttons { display: flex; gap: .8rem; }
 .ghost-btn {
   border: 1.8px solid #8A60E6;
@@ -467,7 +469,6 @@ body, html, #root {
   margin: 8px 0 0 0;
 }
 
-
 .average-note-group {
   display: flex;
   flex-direction: column;
@@ -500,4 +501,16 @@ body, html, #root {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.extra-card-body {
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #555;
+}
+
+.narrow-gap {
+  gap: 1rem !important; 
 }
