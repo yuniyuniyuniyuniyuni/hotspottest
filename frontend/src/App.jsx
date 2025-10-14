@@ -155,7 +155,11 @@ export default function App() {
           <div className="landing-card">
             <img src="/logo.png" alt="Logo" className="logo-image" />
             <div className="logo-box">장사잘될지도</div>
-            <p className="subtitle">AI 상권 분석 기반 창업 성공률 예측 서비스</p>
+            <span className="subtitle">데이터 기반 창업 성공 내비게이션</span>
+            <p className="subtitle">
+            창업자가 자신의 조건(업종, 지역)을 입력하면, 인공지능 기반 데이터 분석을 통해 예상 매출을 산출하고
+            이를 기반으로 점수화, 강·약점 분석, 최적의 대안을 제공하는 서비스입니다.
+            </p>
             <hr className="divider" />
             <form className="form" onSubmit={handleSubmit}>
               <div className="field-row">
@@ -184,14 +188,14 @@ export default function App() {
         <div className="dashboard">
           <div className="dash-header">
             <h1>장사잘될지도</h1>
+            <p className="selection-note">
+                선택하신 지역은 <b>{dongName}</b>, 업종은 <b>{industryName}</b> 입니다.
+              </p>
             <div className="actions">
               <div className="action-buttons">
                 <button className="ghost-btn" onClick={resetAll}>다시 입력하기</button>
                 <button className="ghost-btn" onClick={() => window.print()}>PDF로 받기</button>
               </div>
-              <p className="selection-note">
-                선택하신 지역은 <b>{dongName}</b>, 업종은 <b>{industryName}</b> 입니다.
-              </p>
             </div>
           </div>
 
@@ -201,7 +205,7 @@ export default function App() {
               <div className="donut" style={donutStyle}>
                 <div className="donut-hole"><span>{cbs} 점</span></div>
               </div>
-              {avgScores && <p className="average-note">서울시 전체 평균: {avgScores.avg_cbs_score_seoul.toLocaleString()}점</p>}
+              {avgScores && <p className="average-note">서울시 외식업군 전체 평균: {avgScores.avg_cbs_score_seoul.toLocaleString()}점</p>}
               <div className="score-info">
                  <button type="button" className="info-link" onClick={() => setOpenScoreInfo(v => !v)}>ⓘ 자세히</button>
               </div>
@@ -259,10 +263,10 @@ export default function App() {
               {avgScores && (
                 <div className="average-note-group">
                   <p className="average-note">
-                    {dongName} 전체 업종 평균: {avgScores.avg_sales_dong.toLocaleString()} 원
+                    {dongName} 외식업군 전체 업종 평균: {avgScores.avg_sales_dong.toLocaleString()} 원
                   </p>
                   <p className="average-note">
-                    {industryName} 전체 지역 평균: {avgScores.avg_sales_industry.toLocaleString()} 원
+                    {industryName} 서울시 전체 지역 평균: {avgScores.avg_sales_industry.toLocaleString()} 원
                   </p>
                 </div>
               )}
@@ -281,6 +285,20 @@ export default function App() {
               </div>
             </div>
           </div>
+<div className="grid equal-height narrow-gap">
+  <div className="card">
+    <h3><b>{dongName}</b> 평균 임대료</h3>
+    <div className="extra-card-body">
+      <p className="muted">000000원</p>
+    </div>
+  </div>
+  <div className="card">
+    <h3>평당 <b>{industryName}</b> 인테리어 비용</h3>
+    <div className="extra-card-body">
+      <p className="muted">000000원</p>
+    </div>
+  </div>
+</div>
 
           {/* ★★★ AI 리포트 출력 형식 수정 ★★★ */}
           <section className="insight-panel" aria-label="AI 컨설턴트 최종 전략">
