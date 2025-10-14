@@ -107,6 +107,44 @@ function MapAndListComponent({ dongName, industryName }) {
   );
 }
 
+const RentDistributionChart = ({ data }) => {
+  if (!data || !data.counts || data.counts.length === 0) {
+    return <p className="muted" style={{ margin: 'auto 0' }}>임대료 분포 정보가 없습니다.</p>;
+  }
+
+  const { bins, counts, current_rent_bin_index, current_rent, top_percentile } = data;
+  const maxCount = Math.max(...counts);
+
+  // 차트 아래에 표시될 라벨 생성 (예: "100~200만")
+  const labels = bins.slice(0, -1).map((bin, i) => {
+    const start = Math.round(bin / 10000);
+    const end = Math.round(bins[i + 1] / 10000);
+    return `${start}~${end}만`;
+  });
+
+  return (
+    <div className="rent-chart-container">
+      <div className="rent-chart-header">
+        {top_percentile !== null && top_percentile !== undefined && (
+          <p><b>임대료: {current_rent.toLocaleString()}원 (상위 {top_percentile}%)</b></p>
+        )}
+      </div>
+      <div className="rent-chart">
+        {counts.map((count, i) => (
+          <div className="chart-bar-wrapper" key={i}>
+            <div 
+              className={`chart-bar ${i === current_rent_bin_index ? 'highlight' : ''}`}
+              style={{ height: `${(count / maxCount) * 100}%` }}
+              title={`업종 수: ${count}개`}
+            />
+            <span className="chart-label">{labels[i]}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [dongCode, setDongCode] = useState("");
   const [industryCode, setIndustryCode] = useState("");
@@ -125,6 +163,7 @@ export default function App() {
 
   const dongName = DONG_OPTIONS.find(d => d.code === dongCode)?.name || "";
   const industryName = INDUSTRY_OPTIONS.find(i => i.code === industryCode)?.name || "";
+  const [rentDistribution, setRentDistribution] = useState(null);
 
   const resetAll = () => {
     setDongCode("");
@@ -137,6 +176,7 @@ export default function App() {
     setShapInsight(null);
     setAiReport(null);
     setActiveInsight("strength");
+    setRentDistribution(null);
   };
 
   // ★★★ 분석 로직을 재사용 가능한 함수로 분리 ★★★
@@ -148,13 +188,12 @@ export default function App() {
     
     setError("");
     setLoading(true);
-    setShapInsight(null); // 분석 시작 시 이전 인사이트 초기화
-    setAiReport(null);    // 분석 시작 시 이전 리포트 초기화
+    setShapInsight(null);
+    setAiReport(null);  
     setAvgScores(null);
-
-    // 상태 업데이트로 화면에 선택된 지역/업종 이름 즉시 반영
     setDongCode(dCode);
     setIndustryCode(iCode);
+    setRentDistribution(null);
 
     try {
       const params = new URLSearchParams({ industry_code: iCode, dong_code: dCode });
@@ -170,6 +209,7 @@ export default function App() {
         fetch(`${API_BASE}/get_insight?${params.toString()}`),
         fetch(`${API_BASE}/ai_insight?${params.toString()}`),
         fetch(`${API_BASE}/stats?${params.toString()}`),
+        fetch(`${API_BASE}/rent_distribution?${params.toString()}`),
       ]);
 
       for (const res of responses) {
@@ -179,7 +219,7 @@ export default function App() {
         }
       }
       
-      const [predData, indData, regData, shapData, aiData, statsData] = await Promise.all(
+      const [predData, indData, regData, shapData, aiData, statsData, rentDistData] = await Promise.all(
         responses.map(res => res.json())
       );
       
@@ -190,6 +230,7 @@ export default function App() {
       setAiReport(aiData);
       setAvgScores(statsData);
       setShowResults(true);
+      setRentDistribution(rentDistData);
 
     } catch (err) {
       setError(err.message || "분석 중 오류가 발생했습니다.");
@@ -222,13 +263,10 @@ export default function App() {
         <div className="landing-wrap">
           <div className="landing-card">
             <img src="/logo.png" alt="Logo" className="logo-image" />
-            <div className="logo-box">장사잘될지도</div>
-            <span className="subtitle">데이터 기반 창업 성공 내비게이션</span>
-            <p className="subtitle">
-            창업자가 자신의 조건(업종, 지역)을 입력하면, 인공지능 기반 데이터 분석을 통해 예상 매출을 산출하고
-            이를 기반으로 점수화, 강·약점 분석, 최적의 대안을 제공하는 서비스입니다.
+            <div className="logo-box"><b>장사잘될지도</b></div>
+            <p className="catchphrase">
+              예상 매출부터 전략까지, 창업 성공의 로드맵
             </p>
-            <hr className="divider" />
             <form className="form" onSubmit={handleSubmit}>
               <div className="field-row">
                 <label className="field-label">지역</label>
@@ -356,15 +394,13 @@ export default function App() {
             </div>
             <div className="grid equal-height narrow-gap">
               <div className="card">
-                <h3><b>{dongName}</b> 평균 임대료</h3>
+                <h3><b>{dongName}</b> 평당 임대료 수준</h3>
                 <div className="extra-card-body">
-                  <p className="muted">000000원</p>
-                </div>
-              </div>
-              <div className="card">
-                <h3>평당 <b>{industryName}</b> 인테리어 비용</h3>
-                <div className="extra-card-body">
-                  <p className="muted">000000원</p>
+                  {loading ? (
+                    <p className="muted" style={{ margin: 'auto 0' }}>분포 데이터 로딩 중...</p>
+                  ) : (
+                    <RentDistributionChart data={rentDistribution} />
+                  )}
                 </div>
               </div>
             </div>

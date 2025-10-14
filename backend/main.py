@@ -115,17 +115,68 @@ def predict_by_selection(payload: PredictSelectionPayload):
         (predictions_db['행정동_코드'] == int(payload.dong_code)) &
         (predictions_db['서비스_업종_코드'] == payload.industry_code)
     ]
+    
     if result_row.empty:
         raise HTTPException(status_code=404, detail="선택한 지역과 업종에 대한 데이터를 찾을 수 없습니다.")
     
     data = result_row.iloc[0]
+
     return {
         "dong_code": payload.dong_code, 
         "industry_code": payload.industry_code,
         "prediction": round(float(data['점포당_매출_금액_예측']), 1),
-        "cbs_score": round(float(data['cbs_score']), 2) # 미리 계산된 CBS 점수 반환
+        "cbs_score": round(float(data['cbs_score']), 2), # 미리 계산된 CBS 점수 반환
+        "rent": round(float(data['임대료']), 2)
     }
 
+@app.get("/rent_distribution", summary="지역 내 임대료 분포 데이터 조회")
+def get_rent_distribution(dong_code: str = Query(..., description="행정동 코드"), industry_code: str = Query(..., description="서비스 업종 코드")):
+    if predictions_db is None:
+        raise HTTPException(status_code=503, detail="서버 리소스가 준비되지 않았습니다.")
+
+    # 1. 해당 지역(동)의 모든 임대료 데이터 추출
+    dong_df = predictions_db[predictions_db['행정동_코드'] == int(dong_code)]
+    if dong_df.empty:
+        raise HTTPException(status_code=404, detail=f"'{dong_code}' 지역 데이터를 찾을 수 없습니다.")
+
+    all_rents = predictions_db['임대료'].dropna()
+    if all_rents.empty:
+        return {
+            "bins": [], "counts": [], "current_rent_bin_index": -1,
+            "current_rent": 0, "top_percentile": 50 # 데이터 없을 시 중간값 반환
+        }
+
+    # 2. 현재 선택한 업종의 특정 임대료 조회
+    current_selection_df = dong_df[dong_df['서비스_업종_코드'] == industry_code]
+    current_rent = current_selection_df.iloc[0].get('임대료', 0) if not current_selection_df.empty else 0
+
+    # 3. ✨ 신규: 상위 퍼센트 계산
+    if len(all_rents) > 0:
+        # 자신보다 임대료가 낮은 업종의 수 계산
+        count_lower = (all_rents < current_rent).sum()
+        # 하위 백분위 계산 (0~100)
+        percentile_from_bottom = (count_lower / len(all_rents)) * 100
+        # 상위 백분위로 변환 (e.g., 하위 90% -> 상위 10%)
+        top_percentile = 100.0 - percentile_from_bottom
+    else:
+        top_percentile = 50.0 # 데이터가 없는 경우를 위한 기본값
+
+    # 4. 임대료 데이터를 10개 구간으로 나누어 히스토그램 생성
+    counts, bins = np.histogram(all_rents, bins=10)
+
+    # 5. 현재 임대료가 어느 구간에 속하는지 인덱스 찾기
+    current_rent_bin_index = np.digitize(current_rent, bins) - 1
+    if current_rent_bin_index == len(counts):
+        current_rent_bin_index -= 1
+
+    return {
+        "bins": bins.tolist(),
+        "counts": counts.tolist(),
+        "current_rent_bin_index": int(current_rent_bin_index),
+        "current_rent": int(current_rent),
+        "top_percentile": round(top_percentile, 1) # 계산된 상위 퍼센트 값을 응답에 추가
+    }
+    
 @app.get("/recommend/regions", summary="업종별 최적 지역 Top 5 추천", response_model=List[RecommendationItem])
 def get_top_regions_for_industry(industry_code: str = Query(..., description="서비스 업종 코드")):
     if predictions_db is None:

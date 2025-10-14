@@ -6,7 +6,6 @@ body, html, #root {
   padding: 0;
   font-family: "Noto Sans KR", system-ui, -apple-system, sans-serif;
   background-color: #f8f8f8;
-  /* color: #333; */
 }
 .app-root { min-height: 100vh; }
 
@@ -22,16 +21,24 @@ body, html, #root {
   flex-direction: column;
   align-items: center;
 }
-.logo-box { font-size: 1.8rem; font-weight: 700; color: #8A60E6; margin-bottom: 0.8rem; }
-.subtitle {  font-size: 0.95rem;  color: #555;  margin-bottom: 1.5rem;}
+.logo-box { font-size: 2.5rem; font-weight: 0; color: #8A60E6; margin: 20px;}
+.subtitle {  font-size: 0.95rem;  color: #555;  margin-bottom: 0rem;}
 .subtitle:first-of-type {  margin-top: 0.2rem; }
 
+.catchphrase {
+  font-size: 1.3rem;
+  color: #7d7b7b;
+  text-align: center;
+  margin: 0rem 0 20px 0;
+  line-height: 1.4;
+}
+
 .divider { width: 100%; height: 1px; background: #EEEEEE; border: none; margin: 1.5rem 0; }
-.logo-image { width: 150px; height: auto; margin-bottom: 1rem; margin-bottom: 0px; }
+.logo-image { width: 100px; height: auto; margin: 20px;}
 
 .form { width: 100%; display: flex; flex-direction: column; gap: 1.2rem; }
 .field-row { display: flex; flex-direction: column; }
-.field-label { color: #000; font-weight: 600; margin-bottom: 0.4rem; }
+.field-label { color: #000; font-size: 16px; font-weight: 600; margin-bottom: 0.4rem; }
 .input {
   padding: 0.75rem;
   border: 1.8px solid #ccc;
@@ -102,7 +109,7 @@ body, html, #root {
 .card h3 {
   margin: .3rem 0 .8rem;
   color: #8A60E6;
-  text-align: left;  /* 제목 왼쪽 정렬 */
+  text-align: left;
 }
 
 /* === 도넛 그래프 === */
@@ -134,8 +141,6 @@ body, html, #root {
   transform: scaleX(-1);
 }
 
-.revenue-chart { padding: 0; }
-
 /* === 점수 정보(우측 하단) === */
 .score-info {
   position: absolute;
@@ -145,29 +150,6 @@ body, html, #root {
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
-}
-.score-brief {
-  background: rgba(247,245,255,.9);
-  border: 1px solid #E6E2F8;
-  border-radius: 999px;
-  padding: 6px 10px;
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  font-size: .9rem;
-  color: #444;
-  backdrop-filter: blur(4px);
-}
-.factor-chip {
-  display:inline-flex;
-  align-items:center;
-  padding:.12rem .44rem;
-  border-radius: 999px;
-  background:#F7F5FF;
-  color:#6F4FD9;
-  font-weight:700;
-  border:1px solid #E6E2F8;
-  font-size:.82rem;
 }
 .info-link {
   border:none;
@@ -184,29 +166,29 @@ body, html, #root {
   top: 50px;
   right: 12px;
   z-index: 10;
-  width: 420px; /* 너비를 조금 더 확보 */
+  width: 420px;
   max-width: 90vw;
   background:#fff;
   border: 1px solid #EAEAEA;
-  border-radius: 16px; /* 모서리를 더 부드럽게 */
-  box-shadow: 0 16px 40px rgba(0,0,0,.18); /* 그림자를 더 자연스럽게 */
-  padding: 16px 24px 20px; /* 내부 여백 조정 */
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0,0,0,.18);
+  padding: 16px 24px 20px;
   animation: popIn .15s ease-out;
-  color: #333; /* 기본 텍스트 색상 지정 */
-  display: flex; /* 내부 요소 정렬을 위해 flex 사용 */
+  color: #333;
+  display: flex;
   flex-direction: column;
-  gap: 12px; /* 요소 사이의 간격 */
+  gap: 12px;
 }
 
 .score-popover-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px; /* 헤더 아래 여백 */
+  margin-bottom: 4px;
 }
 
 .score-popover-head b {
-  font-size: 1.1rem; /* 제목 폰트 크기 조정 */
+  font-size: 1.1rem;
   color: #000;
 }
 
@@ -230,9 +212,8 @@ body, html, #root {
   color: #333;
 }
 
-/* 점수 계산 공식 스타일 */
 .score-popover .formula {
-  background-color: #f7f5ff; /* 연한 보라색 배경 */
+  background-color: #f7f5ff;
   border: 1px solid #e6e2f8;
   border-radius: 8px;
   padding: 12px 16px;
@@ -241,13 +222,11 @@ body, html, #root {
   line-height: 1.6;
 }
 
-/* 공식 안의 가중치(%) 강조 */
 .score-popover .formula b {
-  color: #8A60E6; /* 메인 색상으로 강조 */
+  color: #8A60E6;
   font-weight: 700;
 }
 
-/* 팝업 내 테이블 스타일 재정의 */
 .score-popover .table {
   width: 100%;
   border-collapse: collapse;
@@ -263,19 +242,16 @@ body, html, #root {
   font-size: 0.9rem;
 }
 
-/* 1번째 열 (요소) 너비 설정 */
 .score-popover .table th:nth-child(1),
 .score-popover .table td:nth-child(1) {
   width: 30%;
 }
 
-/* 2번째 열 (가중치) 너비 설정 */
 .score-popover .table th:nth-child(2),
 .score-popover .table td:nth-child(2) {
   width: 18%;
 }
 
-/* 테이블 헤더 스타일 */
 .score-popover .table th {
   background-color: #fafafa;
   color: #555;
@@ -284,31 +260,27 @@ body, html, #root {
   text-align: center;
 }
 
-/* 테이블 가중치(%) 열 스타일 */
 .score-popover .table td:nth-child(2) {
   text-align: center;
   font-weight: 600;
   color: #333;
 }
 
-/* 테이블 설명 열 스타일 */
 .score-popover .table td:nth-child(3) {
   color: #666;
 }
 
-/* 마지막 줄 경계선 제거 */
 .score-popover .table tr:last-child td {
   border-bottom: none;
 }
 
-/* 안내 문구 스타일 */
 .score-popover .muted.small {
   text-align: center;
   font-size: 0.8rem;
   color: #999;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid #f0f0f0; /* 위쪽과 구분선 추가 */
+  border-top: 1px solid #f0f0f0;
 }
 
 @keyframes popIn {
@@ -332,6 +304,14 @@ body, html, #root {
 
 .revenue {
   margin: 39px 0 0 0;
+  text-align: center;
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: #333;
+}
+
+.revenue-small {
+  margin: 15px 0 0 0;
   text-align: center;
   font-size: 1.7rem;
   font-weight: 800;
@@ -373,16 +353,6 @@ body, html, #root {
 }
 .chip:hover { box-shadow: 0 3px 10px rgba(138,96,230,.18); }
 .chip.active { background: #8A60E6; color: #fff; }
-.chip-dot {
-  width: 10px; height: 10px;
-  border-radius: 999px;
-  border: 2px solid currentColor;
-  background: transparent;
-}
-.chip.active .chip-dot {
-  background: #fff;
-  border-color: #fff;
-}
 
 .insight-body { min-height: 120px; padding: 4px 2px 2px; }
 .insight-divider {
@@ -408,14 +378,6 @@ body, html, #root {
 
 /* === 지도 & 리스트 === */
 .map-row { display: grid; grid-template-columns: 3fr 1fr; gap: 1.2rem; color:#000 }
-.map-placeholder .map-box {
-  height: 500px;
-  border-radius: 14px;
-  background:#efefef;
-  display:grid;
-  place-items:center;
-  color:#777;
-}
 .list-card h4 { margin:.2rem 0 2.5rem; }
 .bullet-list { list-style: disc; margin:0; padding-left:1.2rem; color:#555; }
 .bullet-list li { margin-bottom:.4rem; }
@@ -431,36 +393,32 @@ body, html, #root {
 }
 
 .table td:last-child {
-  text-align: center; /* 내부 요소를 가운데 정렬 */
-  width: 120px; /* 버튼이 들어갈 충분한 너비 확보 */
+  text-align: center;
+  width: 120px;
 }
 
-/* '바로 분석' 버튼 스타일 */
 .table-action-btn {
-  background-color: #8A60E6; /* 메인 보라색 */
-  color: white; 
-  border: none; 
+  background-color: #8A60E6;
+  color: white;
+  border: none;
   border-radius: 5px;
-  padding: 4px 7px; /* 내부 여백 */
-  font-weight: 600; /* 글자 굵기 */
-  font-size: 14px; /* 글자 크기 */
-  cursor: pointer; /* 마우스 올리면 손가락 모양 */
-  transition: background-color 0.2s ease-in-out, transform 0.1s ease; /* 부드러운 전환 효과 */
+  padding: 4px 7px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out, transform 0.1s ease;
 }
 
-/* 버튼에 마우스를 올렸을 때 스타일 */
 .table-action-btn:hover {
-  background-color: #7148d1; /* 살짝 더 진한 보라색 */
-  transform: translateY(-1px); /* 살짝 위로 이동 */
+  background-color: #7148d1;
+  transform: translateY(-1px);
 }
 
-/* 버튼을 비활성화했을 때 스타일 */
 .table-action-btn:disabled {
-  background-color: #cccccc; /* 회색 */
-  cursor: not-allowed; /* 클릭 불가 커서 */
+  background-color: #cccccc;
+  cursor: not-allowed;
   transform: none;
 }
-
 
 .average-note {
   font-size: 0.8rem;
@@ -477,7 +435,6 @@ body, html, #root {
   margin-bottom: 2.7rem;
 }
 
-/* average-note-group 안의 p 태그는 가운데 정렬을 하지 않음 */
 .average-note-group .average-note {
   text-align: center;
   margin: 0;
@@ -512,16 +469,14 @@ body, html, #root {
 }
 
 .narrow-gap {
-  gap: 1rem !important; 
+  gap: 1rem !important;
 }
-
-/* src/App.css */
 
 .places-list {
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: 340px; /* map-container 높이와 유사하게 */
+  max-height: 340px;
   overflow-y: auto;
 }
 
@@ -544,12 +499,8 @@ body, html, #root {
   margin: 4px 0 0 0;
 }
 
-/* src/App.css 파일 맨 아래에 추가 */
-
-/* 기존 .map-placeholder 관련 스타일은 삭제해도 됩니다. */
-
 .map-container.card {
-  height: 450px; 
+  height: 450px;
   display: flex;
   flex-direction: column;
   padding: 1.4rem 1.4rem;
@@ -559,9 +510,97 @@ body, html, #root {
   margin: 1.6px 0 1rem 0;
 }
 
-/* Map 컴포넌트가 남은 공간을 모두 차지하도록 설정합니다. */
 .map-container > .gm-style {
   flex-grow: 1;
-  border-radius: 10px; /* 지도 모서리를 둥글게 처리 */
-  overflow: hidden;    /* 둥근 모서리 밖으로 나가는 부분 숨김 */
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* src/App.css */
+
+/* ... (파일의 다른 부분은 동일) ... */
+
+.extra-card-body {
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #555;
+}
+
+.rent-chart-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end; /* 차트를 아래에서부터 그리도록 */
+}
+
+.rent-chart-header {
+  font-size: 1.3rem;
+  color: #555;
+  text-align: center;
+}
+.rent-chart-header p { margin: 1rem 0 9rem 0; }
+.rent-chart-header b { color: #333; }
+
+.rent-chart {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end; /* 막대들이 아래쪽을 기준으로 정렬되도록 */
+  gap: 4px;
+  height: 100px; /* 차트의 높이 */
+  width: 100%;
+}
+
+.chart-bar-wrapper {
+  flex: 1; /* 모든 막대가 동일한 너비를 갖도록 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  height: 200%;
+  justify-content: flex-end; /* 막대가 아래에서부터 채워지도록 */
+}
+
+.chart-bar {
+  width: 80%;
+  background-color: #e0d6f9;
+  border-radius: 4px 4px 0 0;
+  transition: all 0.3s ease;
+  min-height: 2px; /* 데이터가 0일 때도 보이도록 */
+}
+
+.chart-bar:hover {
+  background-color: #c4b2f3;
+}
+
+.chart-bar.highlight {
+  background-color: #8A60E6; /* 메인 색상으로 강조 */
+}
+
+.chart-label {
+  font-size: 0.7rem;
+  color: #888;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+
+.narrow-gap {
+  gap: 1rem !important;
+}
+.rent-chart-header b { color: #333; }
+
+/* ★★★ 신규 추가: 퍼센트 텍스트 스타일 ★★★ */
+.rent-percentile {
+  font-size: 0.95rem;
+  color: #333;
+  margin-top: 8px !important;
+  font-weight: 500;
+}
+
+.highlight-text {
+  color: #8A60E6; /* 메인 색상 */
+  font-weight: 800;
 }
