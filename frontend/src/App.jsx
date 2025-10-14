@@ -1,7 +1,9 @@
 // src/App.jsx
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
+import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps"; 
 import "./App.css";
-import DONG_OPTIONS from "./dongOptions";
+import DONG_OPTIONS from "./data/dongOptions";
+import MapComponent from "./components/MapComponent"; 
 
 /** 업종 목록 (MVP용) */
 const INDUSTRY_OPTIONS = [
@@ -25,6 +27,7 @@ const WEIGHTS = {
 };
 
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://localhost:8000";
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const MAIN_PURPLE = "#8A60E6";
 
 // AI 응답 텍스트의 줄바꿈을 처리하기 위한 컴포넌트
@@ -38,6 +41,71 @@ const ParsedText = ({ text }) => {
     </p>
   ));
 };
+
+function MapAndListComponent({ dongName, industryName }) {
+  const [places, setPlaces] = useState([]);
+  const [center, setCenter] = useState({ lat: 37.5665, lng: 126.9780 });
+
+  const placesLibrary = useMapsLibrary('places');
+  
+  useEffect(() => {
+    if (!placesLibrary || !dongName || !industryName) return;
+
+    const { Place } = placesLibrary;
+    const { LatLngBounds } = window.google.maps;
+
+    const searchPlaces = async () => {
+      const request = {
+        textQuery: `${dongName} ${industryName}`,
+        fields: ["id", "displayName", "location", "formattedAddress"],
+        language: 'ko',
+      };
+      try {
+        const { places: searchResults } = await Place.searchByText(request);
+        if (searchResults.length > 0) {
+          setPlaces(searchResults);
+          const bounds = new LatLngBounds();
+          searchResults.forEach(p => p.location && bounds.extend(p.location));
+          setCenter(bounds.getCenter().toJSON());
+        } else {
+          setPlaces([]);
+        }
+      } catch (error) {
+        console.error("Places API 검색 실패:", error);
+      }
+    };
+    searchPlaces();
+  }, [placesLibrary, dongName, industryName]);
+
+  return (
+    <div className="map-row">
+      {/* MapComponent에는 이제 props로 데이터만 전달합니다. */}
+      <MapComponent 
+        places={places} 
+        center={center} 
+        dongName={dongName} 
+        industryName={industryName} 
+      />
+      
+      {/* ★★★ 기존의 리스트 플레이스홀더를 실제 데이터 리스트로 교체합니다. ★★★ */}
+      <div className="list-card card">
+        <h4>{dongName} · {industryName} 검색 결과</h4>
+        {places.length > 0 ? (
+          <ul className="places-list">
+            {places.map(place => (
+              <li key={place.id}>
+                <strong>{place.displayName}</strong>
+                <p>{place.formattedAddress}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">검색된 장소가 없습니다.</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [dongCode, setDongCode] = useState("");
@@ -185,194 +253,189 @@ export default function App() {
           </div>
         </div>
       ) : (
-        <div className="dashboard">
-          <div className="dash-header">
-            <h1>장사잘될지도</h1>
-            <p className="selection-note">
-                선택하신 지역은 <b>{dongName}</b>, 업종은 <b>{industryName}</b> 입니다.
-              </p>
-            <div className="actions">
-              <div className="action-buttons">
-                <button className="ghost-btn" onClick={resetAll}>다시 입력하기</button>
-                <button className="ghost-btn" onClick={() => window.print()}>PDF로 받기</button>
+        <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'maps']}>
+          <div className="dashboard">
+            <div className="dash-header">
+              <h1>장사잘될지도</h1>
+              <p className="selection-note">
+                  선택하신 지역은 <b>{dongName}</b>, 업종은 <b>{industryName}</b> 입니다.
+                </p>
+              <div className="actions">
+                <div className="action-buttons">
+                  <button className="ghost-btn" onClick={resetAll}>다시 입력하기</button>
+                  <button className="ghost-btn" onClick={() => window.print()}>PDF로 받기</button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="grid two equal-height">
-            <div className="card donut-card">
-              <h3 className="donut-title">종합 점수</h3>
-              <div className="donut" style={donutStyle}>
-                <div className="donut-hole"><span>{cbs} 점</span></div>
-              </div>
-              {avgScores && <p className="average-note">서울시 외식업군 전체 평균: {avgScores.avg_cbs_score_seoul.toLocaleString()}점</p>}
-              <div className="score-info">
-                 <button type="button" className="info-link" onClick={() => setOpenScoreInfo(v => !v)}>ⓘ 자세히</button>
-              </div>
-              {openScoreInfo && (
-                <div className="score-popover" role="dialog" aria-label="점수 산정 기준">
-                  <div className="score-popover-head">
-                    <b>점수 산정 기준</b>
-                    <button
-                      className="score-popover-close"
-                      onClick={() => setOpenScoreInfo(false)}
-                    >
-                      ✕
-                    </button>
+            <div className="grid two equal-height">
+              <div className="card donut-card">
+                <h3 className="donut-title">종합 점수</h3>
+                <div className="donut" style={donutStyle}>
+                  <div className="donut-hole"><span>{cbs} 점</span></div>
+                </div>
+                {avgScores && <p className="average-note">서울시 외식업군 전체 평균: {avgScores.avg_cbs_score_seoul.toLocaleString()}점</p>}
+                <div className="score-info">
+                  <button type="button" className="info-link" onClick={() => setOpenScoreInfo(v => !v)}>ⓘ 자세히</button>
+                </div>
+                {openScoreInfo && (
+                  <div className="score-popover" role="dialog" aria-label="점수 산정 기준">
+                    <div className="score-popover-head">
+                      <b>점수 산정 기준</b>
+                      <button
+                        className="score-popover-close"
+                        onClick={() => setOpenScoreInfo(false)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <p className="formula">
+                      CBS 점수 = (점포당 매출 금액 × <b>{WEIGHTS.점포당_매출_금액}</b>) +
+                      (안정성 지수 × <b>{WEIGHTS.안정성_지수}</b>) + <br />
+                      (성장성 지수 × <b>{WEIGHTS.성장성_지수}</b>) +
+                      (입지 우위 지수 × <b>{WEIGHTS.입지_우위_지수}</b>)
+                    </p>
+
+                    <table className="table compact">
+                      <thead>
+                        <tr><th>요소</th><th>가중치</th><th>설명</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr><td>점포당 매출 금액</td><td>35%</td><td>동·업종 단위의 평균 매출</td></tr>
+                        <tr><td>안정성 지수</td><td>25%</td><td>폐업률, 변동성 등 리스크</td></tr>
+                        <tr><td>성장성 지수</td><td>20%</td><td>최근 3년간 매출 추세</td></tr>
+                        <tr><td>입지 우위 지수</td><td>20%</td><td>유동·접근성·경쟁 밀도</td></tr>
+                      </tbody>
+                    </table>
+
+                    <p className="muted small">
+                      ※ 데이터는 주기적으로 업데이트되며, 가중치는 모델에 따라 조정될 수 있습니다.
+                    </p>
                   </div>
-
-                  <p className="formula">
-                     CBS 점수 = (점포당 매출 금액 × <b>{WEIGHTS.점포당_매출_금액}</b>) +
-                    (안정성 지수 × <b>{WEIGHTS.안정성_지수}</b>) + <br />
-                    (성장성 지수 × <b>{WEIGHTS.성장성_지수}</b>) +
-                    (입지 우위 지수 × <b>{WEIGHTS.입지_우위_지수}</b>)
-                  </p>
-
-                  <table className="table compact">
-                    <thead>
-                      <tr><th>요소</th><th>가중치</th><th>설명</th></tr>
-                    </thead>
-                    <tbody>
-                      <tr><td>점포당 매출 금액</td><td>35%</td><td>동·업종 단위의 평균 매출</td></tr>
-                      <tr><td>안정성 지수</td><td>25%</td><td>폐업률, 변동성 등 리스크</td></tr>
-                      <tr><td>성장성 지수</td><td>20%</td><td>최근 3년간 매출 추세</td></tr>
-                      <tr><td>입지 우위 지수</td><td>20%</td><td>유동·접근성·경쟁 밀도</td></tr>
-                    </tbody>
-                  </table>
-
-                  <p className="muted small">
-                    ※ 데이터는 주기적으로 업데이트되며, 가중치는 모델에 따라 조정될 수 있습니다.
-                  </p>
-                </div>
-              )}
-              <hr className="insight-divider" />
-              <div className="insight-header">
-                <button type="button" className="chip active">CBS 점수 결정 요인</button>
-              </div>
-              <div className="insight-body">
-                {shapInsight ? (<ul className="bullet-list">
-                    {shapInsight.cbs.map((item, index) => (<li key={index}>{item.trim()}</li>))}
-                </ul>) : (<p className="muted">분석 데이터를 불러오는 중입니다...</p>)}
-              </div>
-            </div>
-            <div className="card revenue-card">
-              <div className="revenue-header">
-                <h3>월 매출 예측</h3>
-              </div>
-              <div className="revenue"><p>{prediction ? Number(prediction.prediction).toLocaleString() : "–"} 원</p></div>
-              {avgScores && (
-                <div className="average-note-group">
-                  <p className="average-note">
-                    {dongName} 외식업군 전체 업종 평균: {avgScores.avg_sales_dong.toLocaleString()} 원
-                  </p>
-                  <p className="average-note">
-                    {industryName} 서울시 전체 지역 평균: {avgScores.avg_sales_industry.toLocaleString()} 원
-                  </p>
-                </div>
-              )}
-
-              <hr className="insight-divider" />
-              <div className="insight-header">
-                  <button type="button" className={`chip ${activeInsight === "strength" ? "active" : ""}`} onClick={() => setActiveInsight("strength")}>강점 요소</button>
-                  <button type="button" className={`chip ${activeInsight === "weakness" ? "active" : ""}`} onClick={() => setActiveInsight("weakness")}>약점 요소</button>
-              </div>
-              <div className="insight-body">
-                {shapInsight ? (<ul className="bullet-list">
-                    {(activeInsight === 'strength' ? shapInsight.strengths : shapInsight.weaknesses).map((item, index) => (
-                      <li key={index}>{item.trim()}</li>
-                    ))}
-                </ul>) : (<p className="muted">분석 데이터를 불러오는 중입니다...</p>)}
-              </div>
-            </div>
-          </div>
-<div className="grid equal-height narrow-gap">
-  <div className="card">
-    <h3><b>{dongName}</b> 평균 임대료</h3>
-    <div className="extra-card-body">
-      <p className="muted">000000원</p>
-    </div>
-  </div>
-  <div className="card">
-    <h3>평당 <b>{industryName}</b> 인테리어 비용</h3>
-    <div className="extra-card-body">
-      <p className="muted">000000원</p>
-    </div>
-  </div>
-</div>
-
-          {/* ★★★ AI 리포트 출력 형식 수정 ★★★ */}
-          <section className="insight-panel" aria-label="AI 컨설턴트 최종 전략">
-            <div className="strategy-block">
-              <div className="strategy-heading">AI 컨설턴트의 최종 전략</div>
-              <div className="strategy-content">
-                {aiReport && aiReport.report ? (
-                  <>
-                    <h4 className="ai-report-subtitle">결론 요약</h4>
-                    <ParsedText text={aiReport.report.summary} />
-                    <h4 className="ai-report-subtitle">CBS 결정 요인 분석</h4>
-                    <ParsedText text={aiReport.report.cbs_analysis} />
-                    <h4 className="ai-report-subtitle">강점 및 약점 평가</h4>
-                    <ParsedText text={aiReport.report.evaluation} />
-                    <h4 className="ai-report-subtitle">최종 전략 제언</h4>
-                    <ParsedText text={aiReport.report.strategy} />
-                  </>
-                ) : (
-                  <p className="muted">AI 리포트를 생성 중입니다...</p>
                 )}
+                <hr className="insight-divider" />
+                <div className="insight-header">
+                  <button type="button" className="chip active">CBS 점수 결정 요인</button>
+                </div>
+                <div className="insight-body">
+                  {shapInsight ? (<ul className="bullet-list">
+                      {shapInsight.cbs.map((item, index) => (<li key={index}>{item.trim()}</li>))}
+                  </ul>) : (<p className="muted">분석 데이터를 불러오는 중입니다...</p>)}
+                </div>
+              </div>
+              <div className="card revenue-card">
+                <div className="revenue-header">
+                  <h3>월 매출 예측</h3>
+                </div>
+                <div className="revenue"><p>{prediction ? Number(prediction.prediction).toLocaleString() : "–"} 원</p></div>
+                {avgScores && (
+                  <div className="average-note-group">
+                    <p className="average-note">
+                      {dongName} 외식업군 전체 업종 평균: {avgScores.avg_sales_dong.toLocaleString()} 원
+                    </p>
+                    <p className="average-note">
+                      {industryName} 서울시 전체 지역 평균: {avgScores.avg_sales_industry.toLocaleString()} 원
+                    </p>
+                  </div>
+                )}
+
+                <hr className="insight-divider" />
+                <div className="insight-header">
+                    <button type="button" className={`chip ${activeInsight === "strength" ? "active" : ""}`} onClick={() => setActiveInsight("strength")}>강점 요소</button>
+                    <button type="button" className={`chip ${activeInsight === "weakness" ? "active" : ""}`} onClick={() => setActiveInsight("weakness")}>약점 요소</button>
+                </div>
+                <div className="insight-body">
+                  {shapInsight ? (<ul className="bullet-list">
+                      {(activeInsight === 'strength' ? shapInsight.strengths : shapInsight.weaknesses).map((item, index) => (
+                        <li key={index}>{item.trim()}</li>
+                      ))}
+                  </ul>) : (<p className="muted">분석 데이터를 불러오는 중입니다...</p>)}
+                </div>
               </div>
             </div>
-          </section>
+            <div className="grid equal-height narrow-gap">
+              <div className="card">
+                <h3><b>{dongName}</b> 평균 임대료</h3>
+                <div className="extra-card-body">
+                  <p className="muted">000000원</p>
+                </div>
+              </div>
+              <div className="card">
+                <h3>평당 <b>{industryName}</b> 인테리어 비용</h3>
+                <div className="extra-card-body">
+                  <p className="muted">000000원</p>
+                </div>
+              </div>
+            </div>
+            {/* ★★★ AI 리포트 출력 형식 수정 ★★★ */}
+            <section className="insight-panel" aria-label="AI 컨설턴트 최종 전략">
+              <div className="strategy-block">
+                <div className="strategy-heading">AI 컨설턴트의 최종 전략</div>
+                <div className="strategy-content">
+                  {aiReport && aiReport.report ? (
+                    <>
+                      <h4 className="ai-report-subtitle">결론 요약</h4>
+                      <ParsedText text={aiReport.report.summary} />
+                      <h4 className="ai-report-subtitle">CBS 결정 요인 분석</h4>
+                      <ParsedText text={aiReport.report.cbs_analysis} />
+                      <h4 className="ai-report-subtitle">강점 및 약점 평가</h4>
+                      <ParsedText text={aiReport.report.evaluation} />
+                      <h4 className="ai-report-subtitle">최종 전략 제언</h4>
+                      <ParsedText text={aiReport.report.strategy} />
+                    </>
+                  ) : (
+                    <p className="muted">AI 리포트를 생성 중입니다...</p>
+                  )}
+                </div>
+              </div>
+            </section>
 
-          {/* ★★★ 추천 테이블에 '바로 분석' 버튼 추가 ★★★ */}
-          <div className="grid two">
-            <div className="card">
-              <h3>{dongName}에서 성공확률 높은 업종 TOP 5</h3>
-              <table className="table">
-                <thead><tr><th>업종</th><th>점수</th><th></th></tr></thead>
-                <tbody>
-                  {topIndustries?.length ? (topIndustries.map((it) => (
-                    <tr key={it.code}>
-                      <td>{it.name}</td>
-                      <td>{Number(it.cbs_score).toFixed(1)}</td>
-                      <td>
-                        <button className="table-action-btn" onClick={() => startAnalysis(dongCode, it.code)} disabled={loading}>
-                          바로 분석
-                        </button>
-                      </td>
-                    </tr>
-                  ))) : (<tr><td colSpan="3">추천 업종이 없습니다.</td></tr>)}
-                </tbody>
-              </table>
+            {/* ★★★ 추천 테이블에 '바로 분석' 버튼 추가 ★★★ */}
+            <div className="grid two">
+              <div className="card">
+                <h3>{dongName}에서 성공확률 높은 업종 TOP 5</h3>
+                <table className="table">
+                  <thead><tr><th>업종</th><th>점수</th><th></th></tr></thead>
+                  <tbody>
+                    {topIndustries?.length ? (topIndustries.map((it) => (
+                      <tr key={it.code}>
+                        <td>{it.name}</td>
+                        <td>{Number(it.cbs_score).toFixed(1)}</td>
+                        <td>
+                          <button className="table-action-btn" onClick={() => startAnalysis(dongCode, it.code)} disabled={loading}>
+                            바로 분석
+                          </button>
+                        </td>
+                      </tr>
+                    ))) : (<tr><td colSpan="3">추천 업종이 없습니다.</td></tr>)}
+                  </tbody>
+                </table>
+              </div>
+              <div className="card">
+                <h3>{industryName}으로 성공확률 높은 지역 TOP 5</h3>
+                <table className="table">
+                  <thead><tr><th>지역</th><th>점수</th><th></th></tr></thead>
+                  <tbody>
+                    {topRegions?.length ? (topRegions.map((it) => (
+                      <tr key={it.code}>
+                        <td>{it.name}</td>
+                        <td>{Number(it.cbs_score).toFixed(1)}</td>
+                        <td>
+                          <button className="table-action-btn" onClick={() => startAnalysis(it.code, industryCode)} disabled={loading}>
+                            바로 분석
+                          </button>
+                        </td>
+                      </tr>
+                    ))) : (<tr><td colSpan="3">추천 지역이 없습니다.</td></tr>)}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="card">
-              <h3>{industryName}으로 성공확률 높은 지역 TOP 5</h3>
-              <table className="table">
-                <thead><tr><th>지역</th><th>점수</th><th></th></tr></thead>
-                <tbody>
-                  {topRegions?.length ? (topRegions.map((it) => (
-                    <tr key={it.code}>
-                      <td>{it.name}</td>
-                      <td>{Number(it.cbs_score).toFixed(1)}</td>
-                      <td>
-                        <button className="table-action-btn" onClick={() => startAnalysis(it.code, industryCode)} disabled={loading}>
-                          바로 분석
-                        </button>
-                      </td>
-                    </tr>
-                  ))) : (<tr><td colSpan="3">추천 지역이 없습니다.</td></tr>)}
-                </tbody>
-              </table>
-            </div>
+            
+            <MapAndListComponent dongName={dongName} industryName={industryName} />
           </div>
-          
-          <div className="map-row">
-             <div className="map-placeholder card"><div className="map-box">지도</div></div>
-             <div className="list-card card">
-               <h4>{dongName} · {industryName} 리스트</h4>
-               <p className="muted">※ 지도/리스트는 추후 연동 예정</p>
-             </div>
-          </div>
-        </div>
+        </APIProvider>  
       )}
     </div>
   );
