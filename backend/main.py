@@ -141,7 +141,7 @@ def get_top_regions_for_industry(industry_code: str = Query(..., description="�
     return [
         RecommendationItem(name=row['행정동_코드_명'], 
                            code=str(row['행정동_코드']), 
-                           cbs_score=row['cbs_score'], 
+                           cbs_score=round(row['cbs_score'], 2),
                            store_count=int(row['점포_수']) if pd.notna(row['점포_수']) else 0) 
         for _, row in top_5.iterrows()
     ]
@@ -161,7 +161,7 @@ def get_top_industries_for_region(dong_code: str = Query(..., description="행�
     return [
         RecommendationItem(name=row['서비스_업종_코드_명'], 
                            code=row['서비스_업종_코드'], 
-                           cbs_score=row['cbs_score'], 
+                           cbs_score=round(row['cbs_score'], 2),
                            store_count=int(row['점포_수']) if pd.notna(row['점포_수']) else 0)
         for _, row in top_5.iterrows()
     ]
@@ -225,14 +225,13 @@ def get_insight(industry_code: str = Query(..., description="서비스 업종 �
 
     # 영향력의 총합(절대값 기준) 계산
     total_impact = np.abs(cbs_values_instance).sum()
-    epsilon = 1e-6 # 0으로 나누는 것을 방지
+    epsilon = 1e-6 
 
     cbs_results_df = pd.DataFrame({
         'Feature': cbs_features,
         'Actual_Value': instance_to_explain_cbs.iloc[0].values,
         'Mean_Value': background_data_cbs.mean().values,
         'SHAP_Value': cbs_values_instance,
-        # 각 피처의 영향력 기여도(%) 계산
         'Contribution_Percent': (cbs_values_instance / (total_impact + epsilon)) * 100
     }).sort_values(by='SHAP_Value', key=abs, ascending=False).reset_index(drop=True)
 
@@ -302,7 +301,6 @@ def ai_insight(industry_code: str = Query(..., description="서비스 업종 코
     strengths_str = format_list_for_prompt(insight_data["strengths"])
     weaknesses_str = format_list_for_prompt(insight_data["weaknesses"])
 
-    # ★★★★★ [수정] AI가 명확하게 인식할 수 있도록 프롬프트 구조 개선 ★★★★★
     prompt = f"""
     당신은 대한민국 최고의 상권분석 전문가입니다. 예비 창업자에게 조언하는 역할입니다.
     아래 [분석 정보]와 [핵심 분석 데이터]를 바탕으로, 전문적이지만 이해하기 쉬운 최종 컨설팅 의견을 작성해주세요.
@@ -327,7 +325,11 @@ def ai_insight(industry_code: str = Query(..., description="서비스 업종 코
     3. **강점 및 약점 평가 (evaluation):** [핵심 분석 데이터]의 '강점'과 '약점' 데이터를 각각 2~3가지씩 활용하여, 실제 창업 시 어떤 점을 활용하고 어떤 점을 보완해야 할지 분석합니다.
     4. **최종 전략 제언 (strategy):** 모든 분석을 종합하여, 이 상권에 진입하려는 예비 창업자에게 구체적이고 실행 가능한 조언을 한두 문장으로 제시합니다.
     5. 답변은 반드시 한글로, 친절하고 전문가적인 톤으로 작성해주세요.
-    6. **최종 결과는 반드시 다음 키를 포함하는 JSON 형식으로만 응답해주세요: "summary", "cbs_analysis", "evaluation", "strategy"**
+    
+    [JSON 출력 규칙]
+    - 최종 결과는 반드시 "summary", "cbs_analysis", "evaluation", "strategy" 키를 포함하는 JSON 형식으로만 응답해야 합니다.
+    - **매우 중요**: 각 키에 해당하는 값(value)은 반드시 여러 문장으로 구성된 단일 텍스트 문자열(a single string)이어야 합니다.
+    - **절대로 값 부분에 JSON 객체나 리스트(`{{}}`, `[]`)를 중첩하여 사용하지 마세요.**
     """
 
     try:
@@ -347,7 +349,7 @@ def ai_insight(industry_code: str = Query(..., description="서비스 업종 코
         
         # ★★★ API 호출 수정: JSON 모드 활성화 ★★★
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": "You are a top commercial district analyst in South Korea. Your response must be in JSON object format."},
