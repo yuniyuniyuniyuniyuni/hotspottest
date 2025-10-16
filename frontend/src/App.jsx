@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useState, useCallback, useEffect } from "react";
 import { APIProvider, useMapsLibrary } from "@vis.gl/react-google-maps"; 
 import "./App.css";
@@ -26,7 +25,7 @@ const WEIGHTS = {
   "입지_우위_지수": "20%",
 };
 
-const API_BASE = import.meta.env?.VITE_API_BASE || "http://localhost:8000";
+const API_BASE = import.meta.env?.VITE_API_BASE || "";
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const MAIN_PURPLE = "#8A60E6";
 
@@ -79,7 +78,6 @@ function MapAndListComponent({ dongName, industryName }) {
 
   return (
     <div className="map-row">
-      {/* MapComponent에는 이제 props로 데이터만 전달합니다. */}
       <MapComponent 
         places={places} 
         center={center} 
@@ -87,7 +85,6 @@ function MapAndListComponent({ dongName, industryName }) {
         industryName={industryName} 
       />
       
-      {/* ★★★ 기존의 리스트 플레이스홀더를 실제 데이터 리스트로 교체합니다. ★★★ */}
       <div className="list-card card">
         <h4>{dongName} · {industryName} 검색 결과</h4>
         {places.length > 0 ? (
@@ -179,7 +176,6 @@ export default function App() {
     setRentDistribution(null);
   };
 
-  // ★★★ 분석 로직을 재사용 가능한 함수로 분리 ★★★
   const startAnalysis = useCallback(async (dCode, iCode) => {
     if (!dCode || !iCode) {
       setError("지역과 업종 코드가 올바르지 않습니다.");
@@ -198,18 +194,19 @@ export default function App() {
     try {
       const params = new URLSearchParams({ industry_code: iCode, dong_code: dCode });
       
+      // ✅ 수정된 부분: Vercel 배포를 위해 모든 API 경로 앞에 '/api'를 추가합니다.
       const responses = await Promise.all([
-        fetch(`${API_BASE}/predict_by_selection`, {
+        fetch(`${API_BASE}/api/predict_by_selection`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ dong_code: dCode, industry_code: iCode }),
         }),
-        fetch(`${API_BASE}/recommend/industries?dong_code=${dCode}`),
-        fetch(`${API_BASE}/recommend/regions?industry_code=${iCode}`),
-        fetch(`${API_BASE}/get_insight?${params.toString()}`),
-        fetch(`${API_BASE}/ai_insight?${params.toString()}`),
-        fetch(`${API_BASE}/stats?${params.toString()}`),
-        fetch(`${API_BASE}/rent_distribution?${params.toString()}`),
+        fetch(`${API_BASE}/api/recommend/industries?dong_code=${dCode}`),
+        fetch(`${API_BASE}/api/recommend/regions?industry_code=${iCode}`),
+        fetch(`${API_BASE}/api/get_insight?${params.toString()}`),
+        fetch(`${API_BASE}/api/ai_insight?${params.toString()}`),
+        fetch(`${API_BASE}/api/stats?${params.toString()}`),
+        fetch(`${API_BASE}/api/rent_distribution?${params.toString()}`),
       ]);
 
       for (const res of responses) {
@@ -238,7 +235,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, []); // 종속성 배열이 비어있으므로 함수는 한 번만 생성됨
+  }, []); 
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -404,7 +401,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-            {/* ★★★ AI 리포트 출력 형식 수정 ★★★ */}
             <section className="insight-panel" aria-label="AI 컨설턴트 최종 전략">
               <div className="strategy-block">
                 <div className="strategy-heading">AI 컨설턴트의 최종 전략</div>
@@ -427,7 +423,6 @@ export default function App() {
               </div>
             </section>
 
-            {/* ★★★ 추천 테이블에 '바로 분석' 버튼 추가 ★★★ */}
             <div className="grid two">
               <div className="card">
                 <h3>{dongName}에서 성공확률 높은 업종 TOP 5</h3>

@@ -1,0 +1,6 @@
+pydantic
+openai
+python-dotenv
+shap
+numpy
+pandas
